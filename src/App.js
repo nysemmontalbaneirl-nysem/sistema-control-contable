@@ -4,7 +4,7 @@ import {
   FileText, Trash2, Calendar as CalendarIcon, List,
   Database, Download, Bell, Shield, LogOut, History, 
   Lock, UserCog, Eye, Menu, X, ChevronRight, Home,
-  Settings, FileCheck, CheckCircle2, ExternalLink
+  Settings, FileCheck, CheckCircle2, ExternalLink, Pencil // Agregamos Pencil
 } from 'lucide-react';
 
 // --- UTILIDADES ---
@@ -97,6 +97,7 @@ export default function AccountingApp() {
   // Modales
   const [showTaskForm, setShowTaskForm] = useState(false);
   const [showClientModal, setShowClientModal] = useState(false);
+  const [editingUser, setEditingUser] = useState(null); // Nuevo estado para edición de usuario
 
   // --- AUTO-CORRECCIÓN DE ESTILOS ---
   // Este efecto inyecta el motor de diseño (Tailwind) automáticamente si falta en la nube.
@@ -116,6 +117,29 @@ export default function AccountingApp() {
     const newLog = { id: Date.now(), timestamp: new Date().toISOString(), user: currentUser.username, action, details };
     setLogs(prev => [newLog, ...prev]);
   };
+
+  // --- PERMISOS ---
+  // Verifica si el usuario actual tiene permiso para ver un cliente
+  const canViewClient = (clientName) => {
+    if (currentUser.role === 'admin') return true;
+    const client = clients.find(c => c.name === clientName);
+    if (!client) return false;
+    return currentUser.assignments.some(a => a.clientId === client.id);
+  };
+
+  // Verifica si el usuario actual tiene permiso para EDITAR un cliente
+  const canEditClient = (clientName) => {
+    if (currentUser.role === 'admin') return true;
+    const client = clients.find(c => c.name === clientName);
+    if (!client) return false;
+    return currentUser.assignments.some(a => a.clientId === client.id && a.permission === 'edit');
+  };
+
+  // Filtrado de datos según permisos
+  const getVisibleTasks = () => tasks.filter(t => canViewClient(t.client));
+  const getVisibleNotifications = () => notifications.filter(n => canViewClient(n.client));
+  const getVisibleClients = () => currentUser.role === 'admin' ? clients : clients.filter(c => currentUser.assignments.some(a => a.clientId === c.id));
+
 
   // --- LOGIN ---
   if (!currentUser) {
@@ -222,28 +246,28 @@ export default function AccountingApp() {
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                   <StatCard 
                     title="Tareas Pendientes" 
-                    value={tasks.filter(t => t.status === 'Pendiente').length} 
+                    value={getVisibleTasks().filter(t => t.status === 'Pendiente').length} 
                     icon={Clock} 
                     colorClass="bg-slate-600"
                     subtext="Vencen esta semana"
                   />
                   <StatCard 
                     title="En Proceso" 
-                    value={tasks.filter(t => t.status === 'En Proceso').length} 
+                    value={getVisibleTasks().filter(t => t.status === 'En Proceso').length} 
                     icon={Users} 
                     colorClass="bg-blue-600"
                     subtext="Asignadas a equipo"
                   />
                   <StatCard 
                     title="Por Revisar" 
-                    value={tasks.filter(t => t.status === 'En Revisión').length} 
+                    value={getVisibleTasks().filter(t => t.status === 'En Revisión').length} 
                     icon={FileCheck} 
                     colorClass="bg-amber-500"
                     subtext="Requieren VB del Contador"
                   />
                   <StatCard 
                     title="Notificaciones" 
-                    value={notifications.filter(n => n.sunatStatus !== 'FAVORABLE').length} 
+                    value={getVisibleNotifications().filter(n => n.sunatStatus !== 'FAVORABLE').length} 
                     icon={AlertCircle} 
                     colorClass="bg-red-600"
                     subtext="Fiscalizaciones activas"
@@ -257,7 +281,7 @@ export default function AccountingApp() {
                       <List size={18} className="text-blue-600"/> Tareas Recientes
                     </h3>
                     <div className="space-y-3">
-                      {tasks.slice(0, 5).map(task => (
+                      {getVisibleTasks().slice(0, 5).map(task => (
                         <div key={task.id} className="flex items-center justify-between p-3 bg-slate-50 rounded-lg border border-slate-100 hover:border-blue-200 transition-colors">
                           <div>
                             <p className="text-sm font-semibold text-slate-700">{task.title}</p>
@@ -274,11 +298,11 @@ export default function AccountingApp() {
                      <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2">
                       <Bell size={18} className="text-red-600"/> Alertas Fiscales
                     </h3>
-                    {notifications.length === 0 ? (
+                    {getVisibleNotifications().length === 0 ? (
                       <p className="text-sm text-slate-400 italic">No hay alertas pendientes.</p>
                     ) : (
                       <div className="space-y-3">
-                         {notifications.map(n => (
+                         {getVisibleNotifications().map(n => (
                            <div key={n.id} className="p-3 bg-red-50 rounded-lg border border-red-100">
                              <div className="flex justify-between">
                                <span className="text-xs font-bold text-red-700">{n.type}</span>
@@ -300,9 +324,10 @@ export default function AccountingApp() {
             {/* OTRAS VISTAS (Funcionales para pruebas) */}
             {viewMode === 'tasks' && (
               <TasksModule 
-                tasks={tasks} setTasks={setTasks} 
+                tasks={getVisibleTasks()} setTasks={setTasks} 
                 clients={clients} 
                 currentUser={currentUser} 
+                canEditClient={canEditClient}
                 logAction={logAction}
                 onNewTask={() => setShowTaskForm(true)}
               />
@@ -310,7 +335,7 @@ export default function AccountingApp() {
             
             {viewMode === 'clients' && (
               <ClientsModule 
-                 clients={clients} setClients={setClients} 
+                 clients={getVisibleClients()} setClients={setClients} 
                  currentUser={currentUser} 
                  onNewClient={() => setShowClientModal(true)}
               />
@@ -321,6 +346,8 @@ export default function AccountingApp() {
                 users={users} setUsers={setUsers}
                 logs={logs}
                 clients={clients}
+                onNewUser={() => setEditingUser({ name: '', username: '', password: '', role: 'user', assignments: [] })}
+                onEditUser={(user) => setEditingUser(user)}
               />
             )}
 
@@ -341,7 +368,7 @@ export default function AccountingApp() {
       {/* MODALES FLOTANTES */}
       {showTaskForm && (
         <TaskFormModal 
-            clients={clients}
+            clients={getVisibleClients().filter(c => canEditClient(c.name))}
             onClose={() => setShowTaskForm(false)}
             onSave={(task) => {
                 setTasks([task, ...tasks]);
@@ -357,6 +384,28 @@ export default function AccountingApp() {
                 setClients([...clients, client]);
                 logAction('Nuevo Cliente', client.name);
                 setShowClientModal(false);
+            }}
+        />
+      )}
+      {editingUser && (
+        <UserEditModal
+            user={editingUser}
+            clients={clients}
+            onClose={() => setEditingUser(null)}
+            onSave={(savedUser) => {
+                if(savedUser.id) {
+                    setUsers(users.map(u => u.id === savedUser.id ? savedUser : u));
+                    logAction('Usuario Modificado', savedUser.username);
+                } else {
+                    setUsers([...users, { ...savedUser, id: Date.now() }]);
+                    logAction('Nuevo Usuario', savedUser.username);
+                }
+                setEditingUser(null);
+            }}
+            onDelete={(userId) => {
+                 setUsers(users.filter(u => u.id !== userId));
+                 logAction('Usuario Eliminado', userId);
+                 setEditingUser(null);
             }}
         />
       )}
@@ -396,8 +445,8 @@ const LoginForm = ({ users, onLogin }) => {
   );
 };
 
-const TasksModule = ({ tasks, setTasks, clients, currentUser, logAction, onNewTask }) => {
-  const canEdit = (clientName) => currentUser.role === 'admin' || currentUser.assignments.some(a => a.clientId === clients.find(c=>c.name===clientName)?.id && a.permission === 'edit');
+const TasksModule = ({ tasks, setTasks, clients, currentUser, canEditClient, logAction, onNewTask }) => {
+  // Ahora usamos la función global de permisos
   
   return (
     <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
@@ -406,9 +455,12 @@ const TasksModule = ({ tasks, setTasks, clients, currentUser, logAction, onNewTa
           <h2 className="text-xl font-bold text-slate-800">Control de Obligaciones</h2>
           <p className="text-sm text-slate-500">Gestión de tareas recurrentes y vencimientos</p>
         </div>
-        <button onClick={onNewTask} className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 transition-colors">
-          <Plus size={18} /> Nueva Tarea
-        </button>
+        {/* Solo mostrar botón si tiene permiso de edición en AL MENOS un cliente */}
+        {(currentUser.role === 'admin' || currentUser.assignments.some(a => a.permission === 'edit')) && (
+            <button onClick={onNewTask} className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 transition-colors">
+            <Plus size={18} /> Nueva Tarea
+            </button>
+        )}
       </div>
       <div className="overflow-x-auto">
         <table className="w-full text-sm text-left">
@@ -434,7 +486,7 @@ const TasksModule = ({ tasks, setTasks, clients, currentUser, logAction, onNewTa
                 <td className="px-6 py-4 text-slate-600 font-mono">{task.dueDate}</td>
                 <td className="px-6 py-4"><Badge status={task.status}/></td>
                 <td className="px-6 py-4 text-center">
-                  {canEdit(task.client) ? (
+                  {canEditClient(task.client) ? (
                      <div className="flex items-center justify-center gap-2">
                          <select 
                            className="text-xs border-slate-300 rounded py-1 px-2 bg-white text-slate-700"
@@ -502,20 +554,39 @@ const ClientsModule = ({ clients, setClients, currentUser, onNewClient }) => (
   </div>
 );
 
-const AdminModule = ({ users, logs }) => (
+const AdminModule = ({ users, logs, onNewUser, onEditUser }) => (
   <div className="space-y-6">
     <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
-      <h2 className="text-xl font-bold text-slate-800 mb-4">Usuarios del Sistema</h2>
-      <div className="flex gap-2 flex-wrap">
+      <div className="flex justify-between items-center mb-4">
+        <h2 className="text-xl font-bold text-slate-800">Usuarios del Sistema</h2>
+        <button onClick={onNewUser} className="bg-purple-600 hover:bg-purple-700 text-white px-3 py-2 rounded-lg text-sm font-medium flex items-center gap-2 transition-colors">
+          <Plus size={18} /> Nuevo Usuario
+        </button>
+      </div>
+      <div className="flex gap-4 flex-wrap">
         {users.map(u => (
-          <div key={u.id} className="flex items-center gap-3 p-3 border border-slate-200 rounded-lg pr-6">
-            <div className={`p-2 rounded-full ${u.role === 'admin' ? 'bg-purple-100 text-purple-700' : 'bg-blue-50 text-blue-600'}`}>
-              {u.role === 'admin' ? <Shield size={16}/> : <Users size={16}/>}
+          <div key={u.id} className="flex items-center justify-between gap-3 p-3 border border-slate-200 rounded-lg min-w-[250px] bg-white hover:shadow-md transition">
+            <div className="flex items-center gap-3">
+                <div className={`p-2 rounded-full ${u.role === 'admin' ? 'bg-purple-100 text-purple-700' : 'bg-blue-50 text-blue-600'}`}>
+                {u.role === 'admin' ? <Shield size={16}/> : <Users size={16}/>}
+                </div>
+                <div>
+                    <p className="text-sm font-bold text-slate-800">{u.name}</p>
+                    <p className="text-xs text-slate-500">@{u.username}</p>
+                    {u.role !== 'admin' && (
+                        <p className="text-[10px] text-slate-400 mt-1">
+                            {u.assignments.length} Clientes asignados
+                        </p>
+                    )}
+                </div>
             </div>
-            <div>
-              <p className="text-sm font-bold text-slate-800">{u.name}</p>
-              <p className="text-xs text-slate-500">@{u.username}</p>
-            </div>
+            <button 
+                onClick={() => onEditUser(u)}
+                className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-slate-50 rounded-lg transition-colors"
+                title="Editar permisos"
+            >
+                <Pencil size={16}/>
+            </button>
           </div>
         ))}
       </div>
@@ -549,6 +620,18 @@ const AdminModule = ({ users, logs }) => (
 
 const TaskFormModal = ({ onClose, onSave, clients }) => {
     const [formData, setFormData] = useState({ title: '', client: clients[0]?.name || '', assistant: '', dueDate: '', status: 'Pendiente' });
+    
+    // Si no hay clientes disponibles para editar, mostrar mensaje
+    if(clients.length === 0) return (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+             <div className="bg-white rounded-xl shadow-2xl p-6 text-center">
+                <Lock size={32} className="mx-auto text-slate-400 mb-2"/>
+                <h3 className="text-lg font-bold">Sin Permisos</h3>
+                <p className="text-sm text-slate-500 mb-4">No tiene asignado ningún cliente con permiso de EDICIÓN.</p>
+                <button onClick={onClose} className="px-4 py-2 bg-slate-100 rounded-lg">Cerrar</button>
+             </div>
+        </div>
+    );
 
     return (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
@@ -612,6 +695,128 @@ const ClientFormModal = ({ onClose, onSave }) => {
                     <div className="flex justify-end gap-2 mt-6">
                         <button onClick={onClose} className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg text-sm font-medium">Cancelar</button>
                         <button onClick={() => onSave({...formData, id: Date.now()})} className="px-4 py-2 bg-emerald-600 text-white hover:bg-emerald-700 rounded-lg text-sm font-medium">Registrar Cliente</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+const UserEditModal = ({ user, clients, onSave, onClose, onDelete }) => {
+    const [formData, setFormData] = useState({ ...user });
+
+    const toggleAssignment = (clientId) => {
+        const exists = formData.assignments.find(a => a.clientId === clientId);
+        if (exists) {
+            // Remover
+            setFormData({
+                ...formData,
+                assignments: formData.assignments.filter(a => a.clientId !== clientId)
+            });
+        } else {
+            // Agregar (Default Read Only)
+            setFormData({
+                ...formData,
+                assignments: [...formData.assignments, { clientId, permission: 'read_only' }]
+            });
+        }
+    };
+
+    const changePermission = (clientId, perm) => {
+        setFormData({
+            ...formData,
+            assignments: formData.assignments.map(a => 
+                a.clientId === clientId ? { ...a, permission: perm } : a
+            )
+        });
+    };
+
+    return (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl p-6 flex flex-col max-h-[90vh]">
+                <div className="flex justify-between items-center mb-4 border-b border-slate-100 pb-2">
+                    <h3 className="text-lg font-bold text-slate-800">
+                        {formData.id ? 'Editar Usuario y Permisos' : 'Nuevo Usuario'}
+                    </h3>
+                    <button onClick={onClose}><X size={20} className="text-slate-400 hover:text-slate-600"/></button>
+                </div>
+                
+                <div className="overflow-y-auto flex-1 pr-2">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                        <div>
+                            <label className="text-xs font-bold text-slate-500 uppercase block mb-1">Nombre Completo</label>
+                            <input type="text" className="w-full border-slate-300 rounded-lg p-2 text-sm" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} />
+                        </div>
+                        <div>
+                            <label className="text-xs font-bold text-slate-500 uppercase block mb-1">Usuario (Login)</label>
+                            <input type="text" className="w-full border-slate-300 rounded-lg p-2 text-sm" value={formData.username} onChange={e => setFormData({...formData, username: e.target.value})} />
+                        </div>
+                        <div>
+                            <label className="text-xs font-bold text-slate-500 uppercase block mb-1">Contraseña</label>
+                            <input type="text" className="w-full border-slate-300 rounded-lg p-2 text-sm" value={formData.password} onChange={e => setFormData({...formData, password: e.target.value})} />
+                        </div>
+                        <div>
+                            <label className="text-xs font-bold text-slate-500 uppercase block mb-1">Rol Global</label>
+                            <select className="w-full border-slate-300 rounded-lg p-2 text-sm" value={formData.role} onChange={e => setFormData({...formData, role: e.target.value})}>
+                                <option value="user">Asistente (Restringido)</option>
+                                <option value="admin">Administrador (Total)</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    {/* SECCIÓN DE ASIGNACIÓN DE CLIENTES (SOLO SI NO ES ADMIN) */}
+                    {formData.role === 'user' && (
+                        <div className="bg-slate-50 p-4 rounded-xl border border-slate-200">
+                            <h4 className="font-bold text-sm text-slate-700 mb-3 flex items-center gap-2">
+                                <Database size={16}/> Asignación de Cartera
+                            </h4>
+                            <p className="text-xs text-slate-500 mb-3">Marque los clientes que este usuario puede ver. Defina si puede solo leer o editar.</p>
+                            
+                            <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
+                                {clients.map(client => {
+                                    const assignment = formData.assignments.find(a => a.clientId === client.id);
+                                    const isAssigned = !!assignment;
+
+                                    return (
+                                        <div key={client.id} className={`flex items-center justify-between p-2 rounded-lg border transition-all ${isAssigned ? 'bg-white border-blue-200 shadow-sm' : 'border-transparent hover:bg-slate-100'}`}>
+                                            <div className="flex items-center gap-3">
+                                                <input 
+                                                    type="checkbox" 
+                                                    checked={isAssigned} 
+                                                    onChange={() => toggleAssignment(client.id)}
+                                                    className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500 cursor-pointer"
+                                                />
+                                                <span className={`text-sm ${isAssigned ? 'font-bold text-slate-800' : 'text-slate-500'}`}>{client.name}</span>
+                                            </div>
+                                            
+                                            {isAssigned && (
+                                                <select 
+                                                    value={assignment.permission}
+                                                    onChange={(e) => changePermission(client.id, e.target.value)}
+                                                    className={`text-xs border-0 rounded px-2 py-1 font-bold cursor-pointer ${assignment.permission === 'edit' ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-600'}`}
+                                                >
+                                                    <option value="read_only">👁️ Solo Lectura</option>
+                                                    <option value="edit">✏️ Edición Total</option>
+                                                </select>
+                                            )}
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                    )}
+                </div>
+
+                <div className="flex justify-between mt-6 pt-4 border-t border-slate-100">
+                     {formData.id && formData.username !== 'admin' ? (
+                        <button onClick={() => { if(confirm('¿Eliminar usuario permanentemente?')) onDelete(formData.id); }} className="text-red-500 hover:text-red-700 text-sm flex items-center gap-1">
+                            <Trash2 size={16}/> Eliminar
+                        </button>
+                     ) : <div></div>}
+
+                    <div className="flex gap-2">
+                        <button onClick={onClose} className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg text-sm font-medium">Cancelar</button>
+                        <button onClick={() => onSave(formData)} className="px-4 py-2 bg-blue-600 text-white hover:bg-blue-700 rounded-lg text-sm font-medium">Guardar Cambios</button>
                     </div>
                 </div>
             </div>
