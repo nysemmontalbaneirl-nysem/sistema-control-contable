@@ -297,13 +297,14 @@ export default function AccountingApp() {
               </div>
             )}
 
-            {/* OTRAS VISTAS (Simplificadas para mantener el código limpio en este ejemplo) */}
+            {/* OTRAS VISTAS (Funcionales para pruebas) */}
             {viewMode === 'tasks' && (
               <TasksModule 
                 tasks={tasks} setTasks={setTasks} 
                 clients={clients} 
                 currentUser={currentUser} 
                 logAction={logAction}
+                onNewTask={() => setShowTaskForm(true)}
               />
             )}
             
@@ -311,6 +312,7 @@ export default function AccountingApp() {
               <ClientsModule 
                  clients={clients} setClients={setClients} 
                  currentUser={currentUser} 
+                 onNewClient={() => setShowClientModal(true)}
               />
             )}
 
@@ -326,7 +328,6 @@ export default function AccountingApp() {
                <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
                  <h2 className="text-xl font-bold text-slate-800 mb-4">Central de Notificaciones SUNAT</h2>
                  <p className="text-sm text-slate-500 mb-4">Bandeja unificada de alertas fiscales.</p>
-                 {/* Reutilizar tabla de notificaciones aquí */}
                  <div className="text-center py-10 bg-slate-50 rounded border border-dashed border-slate-300 text-slate-400">
                    Módulo de Notificaciones Activo (Ver Dashboard para resumen)
                  </div>
@@ -336,6 +337,29 @@ export default function AccountingApp() {
           </div>
         </main>
       </div>
+
+      {/* MODALES FLOTANTES */}
+      {showTaskForm && (
+        <TaskFormModal 
+            clients={clients}
+            onClose={() => setShowTaskForm(false)}
+            onSave={(task) => {
+                setTasks([task, ...tasks]);
+                logAction('Nueva Tarea', task.title);
+                setShowTaskForm(false);
+            }}
+        />
+      )}
+      {showClientModal && (
+        <ClientFormModal
+            onClose={() => setShowClientModal(false)}
+            onSave={(client) => {
+                setClients([...clients, client]);
+                logAction('Nuevo Cliente', client.name);
+                setShowClientModal(false);
+            }}
+        />
+      )}
     </div>
   );
 }
@@ -372,8 +396,7 @@ const LoginForm = ({ users, onLogin }) => {
   );
 };
 
-const TasksModule = ({ tasks, setTasks, clients, currentUser, logAction }) => {
-  // Lógica simplificada de tareas
+const TasksModule = ({ tasks, setTasks, clients, currentUser, logAction, onNewTask }) => {
   const canEdit = (clientName) => currentUser.role === 'admin' || currentUser.assignments.some(a => a.clientId === clients.find(c=>c.name===clientName)?.id && a.permission === 'edit');
   
   return (
@@ -383,7 +406,7 @@ const TasksModule = ({ tasks, setTasks, clients, currentUser, logAction }) => {
           <h2 className="text-xl font-bold text-slate-800">Control de Obligaciones</h2>
           <p className="text-sm text-slate-500">Gestión de tareas recurrentes y vencimientos</p>
         </div>
-        <button className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 transition-colors">
+        <button onClick={onNewTask} className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 transition-colors">
           <Plus size={18} /> Nueva Tarea
         </button>
       </div>
@@ -412,17 +435,27 @@ const TasksModule = ({ tasks, setTasks, clients, currentUser, logAction }) => {
                 <td className="px-6 py-4"><Badge status={task.status}/></td>
                 <td className="px-6 py-4 text-center">
                   {canEdit(task.client) ? (
-                    <button 
-                      onClick={() => {
-                        if(confirm('¿Marcar como completado?')) {
-                          setTasks(tasks.map(t => t.id === task.id ? {...t, status: 'Completado'} : t));
-                          logAction('Tarea Completada', `ID ${task.id}`);
-                        }
-                      }}
-                      className="text-slate-400 hover:text-emerald-600 p-1"
-                    >
-                      <CheckCircle2 size={18}/>
-                    </button>
+                     <div className="flex items-center justify-center gap-2">
+                         <select 
+                           className="text-xs border-slate-300 rounded py-1 px-2 bg-white text-slate-700"
+                           value={task.status}
+                           onChange={(e) => {
+                             setTasks(tasks.map(t => t.id === task.id ? { ...t, status: e.target.value } : t));
+                             logAction('Estado Tarea', `ID ${task.id} -> ${e.target.value}`);
+                           }}
+                         >
+                           <option value="Pendiente">Pendiente</option>
+                           <option value="En Proceso">En Proceso</option>
+                           <option value="En Revisión">En Revisión</option>
+                           <option value="Completado">Completado</option>
+                         </select>
+                         <button onClick={() => {
+                            if(confirm('¿Eliminar esta tarea?')) {
+                                setTasks(tasks.filter(t => t.id !== task.id));
+                                logAction('Tarea Eliminada', `ID ${task.id}`);
+                            }
+                         }} className="text-slate-400 hover:text-red-600 p-1"><Trash2 size={16}/></button>
+                      </div>
                   ) : <Lock size={14} className="mx-auto text-slate-300"/>}
                 </td>
               </tr>
@@ -434,9 +467,16 @@ const TasksModule = ({ tasks, setTasks, clients, currentUser, logAction }) => {
   );
 };
 
-const ClientsModule = ({ clients, setClients, currentUser }) => (
+const ClientsModule = ({ clients, setClients, currentUser, onNewClient }) => (
   <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
-    <h2 className="text-xl font-bold text-slate-800 mb-6">Cartera de Clientes</h2>
+    <div className="flex justify-between items-center mb-6">
+        <h2 className="text-xl font-bold text-slate-800">Cartera de Clientes</h2>
+        {currentUser.role === 'admin' && (
+            <button onClick={onNewClient} className="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-2 rounded-lg text-sm font-medium flex items-center gap-2 transition-colors">
+            <Plus size={18} /> Nuevo Cliente
+            </button>
+        )}
+    </div>
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
       {clients.map(c => (
         <div key={c.id} className="border border-slate-200 rounded-lg p-4 hover:border-blue-300 hover:shadow-md transition-all group bg-white">
@@ -504,3 +544,77 @@ const AdminModule = ({ users, logs }) => (
     </div>
   </div>
 );
+
+// --- MODALES (NUEVOS COMPONENTES) ---
+
+const TaskFormModal = ({ onClose, onSave, clients }) => {
+    const [formData, setFormData] = useState({ title: '', client: clients[0]?.name || '', assistant: '', dueDate: '', status: 'Pendiente' });
+
+    return (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-xl shadow-2xl w-full max-w-md p-6">
+                <div className="flex justify-between items-center mb-4">
+                    <h3 className="text-lg font-bold text-slate-800">Nueva Tarea</h3>
+                    <button onClick={onClose}><X size={20} className="text-slate-400 hover:text-slate-600"/></button>
+                </div>
+                <div className="space-y-4">
+                    <div>
+                        <label className="text-xs font-bold text-slate-500 uppercase block mb-1">Cliente</label>
+                        <select className="w-full border-slate-300 rounded-lg p-2 text-sm" value={formData.client} onChange={e => setFormData({...formData, client: e.target.value})}>
+                            {clients.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
+                        </select>
+                    </div>
+                    <div>
+                        <label className="text-xs font-bold text-slate-500 uppercase block mb-1">Descripción</label>
+                        <input type="text" className="w-full border-slate-300 rounded-lg p-2 text-sm" placeholder="Ej: Declaración Mensual" value={formData.title} onChange={e => setFormData({...formData, title: e.target.value})} />
+                    </div>
+                    <div>
+                        <label className="text-xs font-bold text-slate-500 uppercase block mb-1">Responsable</label>
+                        <input type="text" className="w-full border-slate-300 rounded-lg p-2 text-sm" placeholder="Nombre del Asistente" value={formData.assistant} onChange={e => setFormData({...formData, assistant: e.target.value})} />
+                    </div>
+                    <div>
+                        <label className="text-xs font-bold text-slate-500 uppercase block mb-1">Vencimiento</label>
+                        <input type="date" className="w-full border-slate-300 rounded-lg p-2 text-sm" value={formData.dueDate} onChange={e => setFormData({...formData, dueDate: e.target.value})} />
+                    </div>
+                    <div className="flex justify-end gap-2 mt-6">
+                        <button onClick={onClose} className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg text-sm font-medium">Cancelar</button>
+                        <button onClick={() => onSave({...formData, id: Date.now()})} className="px-4 py-2 bg-blue-600 text-white hover:bg-blue-700 rounded-lg text-sm font-medium">Guardar Tarea</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+const ClientFormModal = ({ onClose, onSave }) => {
+    const [formData, setFormData] = useState({ name: '', ruc: '', driveUrl: '' });
+
+    return (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-xl shadow-2xl w-full max-w-md p-6">
+                <div className="flex justify-between items-center mb-4">
+                    <h3 className="text-lg font-bold text-slate-800">Nuevo Cliente</h3>
+                    <button onClick={onClose}><X size={20} className="text-slate-400 hover:text-slate-600"/></button>
+                </div>
+                <div className="space-y-4">
+                    <div>
+                        <label className="text-xs font-bold text-slate-500 uppercase block mb-1">Razón Social</label>
+                        <input type="text" className="w-full border-slate-300 rounded-lg p-2 text-sm" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} />
+                    </div>
+                    <div>
+                        <label className="text-xs font-bold text-slate-500 uppercase block mb-1">RUC</label>
+                        <input type="text" className="w-full border-slate-300 rounded-lg p-2 text-sm" value={formData.ruc} onChange={e => setFormData({...formData, ruc: e.target.value})} />
+                    </div>
+                    <div>
+                        <label className="text-xs font-bold text-slate-500 uppercase block mb-1">Carpeta Drive (Link)</label>
+                        <input type="text" className="w-full border-slate-300 rounded-lg p-2 text-sm" placeholder="https://..." value={formData.driveUrl} onChange={e => setFormData({...formData, driveUrl: e.target.value})} />
+                    </div>
+                    <div className="flex justify-end gap-2 mt-6">
+                        <button onClick={onClose} className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg text-sm font-medium">Cancelar</button>
+                        <button onClick={() => onSave({...formData, id: Date.now()})} className="px-4 py-2 bg-emerald-600 text-white hover:bg-emerald-700 rounded-lg text-sm font-medium">Registrar Cliente</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+};
