@@ -1,10 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Users, Clock, AlertCircle, BarChart3, Plus, Search,
   FileText, Trash2, Calendar as CalendarIcon, List,
   Database, Download, Bell, Shield, LogOut, History, 
   Lock, UserCog, Eye, Menu, X, ChevronRight, Home,
-  Settings, FileCheck, CheckCircle2, ExternalLink // <--- Íconos agregados
+  Settings, FileCheck, CheckCircle2, ExternalLink
 } from 'lucide-react';
 
 // --- UTILIDADES ---
@@ -97,6 +97,19 @@ export default function AccountingApp() {
   // Modales
   const [showTaskForm, setShowTaskForm] = useState(false);
   const [showClientModal, setShowClientModal] = useState(false);
+
+  // --- AUTO-CORRECCIÓN DE ESTILOS ---
+  // Este efecto inyecta el motor de diseño (Tailwind) automáticamente si falta en la nube.
+  useEffect(() => {
+    const existingScript = document.getElementById('tailwind-script');
+    if (!existingScript) {
+      const script = document.createElement('script');
+      script.id = 'tailwind-script';
+      script.src = "https://cdn.tailwindcss.com";
+      script.async = true;
+      document.head.appendChild(script);
+    }
+  }, []);
 
   // --- LOGGING ---
   const logAction = (action, details) => {
