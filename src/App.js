@@ -4,822 +4,601 @@ import {
   FileText, Trash2, Calendar as CalendarIcon, List,
   Database, Download, Bell, Shield, LogOut, History, 
   Lock, UserCog, Eye, Menu, X, ChevronRight, Home,
-  Settings, FileCheck, CheckCircle2, ExternalLink, Pencil // Agregamos Pencil
+  Settings, FileCheck, CheckCircle2, ExternalLink, Pencil,
+  ClipboardList, Timer, RefreshCw
 } from 'lucide-react';
+import { initializeApp } from 'firebase/app';
+import { 
+  getFirestore, collection, doc, setDoc, getDoc, 
+  onSnapshot, query, addDoc, updateDoc, deleteDoc, 
+  Timestamp 
+} from 'firebase/firestore';
+import { 
+  getAuth, signInAnonymously, onAuthStateChanged, 
+  signInWithCustomToken 
+} from 'firebase/auth';
+
+// --- CONFIGURACIÓN FIREBASE (ASIGNADA POR EL ENTORNO) ---
+const firebaseConfig = JSON.parse(__firebase_config);
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
+const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
 
 // --- UTILIDADES ---
-const formatDateTime = (date) => new Date(date).toLocaleString('es-PE', { 
-  day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' 
-});
-
-// --- ESTILOS DE COLORES CORPORATIVOS ---
-const COLORS = {
-  sidebar: 'bg-slate-900',
-  sidebarHover: 'hover:bg-slate-800',
-  primary: 'bg-blue-600 hover:bg-blue-700',
-  success: 'bg-emerald-600 hover:bg-emerald-700',
-  warning: 'bg-amber-500 hover:bg-amber-600',
-  danger: 'bg-red-600 hover:bg-red-700',
-  background: 'bg-slate-50',
-  card: 'bg-white',
-  textMain: 'text-slate-800',
-  textMuted: 'text-slate-500'
+const formatDateTime = (date) => {
+  if (!date) return "---";
+  const d = date.toDate ? date.toDate() : new Date(date);
+  return d.toLocaleString('es-PE', { 
+    day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' 
+  });
 };
 
-// --- COMPONENTES UI ATÓMICOS ---
+const getTodayISO = () => new Date().toISOString().split('T')[0];
 
+// --- COMPONENTES UI ATÓMICOS ---
 const Badge = ({ status }) => {
   const styles = {
     'Pendiente': 'bg-slate-100 text-slate-700 border-slate-200',
     'En Proceso': 'bg-blue-50 text-blue-700 border-blue-200',
     'En Revisión': 'bg-amber-50 text-amber-700 border-amber-200',
-    'Completado': 'bg-emerald-50 text-emerald-700 border-emerald-200',
-    'Atrasado': 'bg-rose-50 text-rose-700 border-rose-200',
-    'FAVORABLE': 'bg-emerald-100 text-emerald-800 border-emerald-200 font-bold',
-    'EN EVALUACIÓN': 'bg-indigo-50 text-indigo-700 border-indigo-200',
-    'POR PRESENTAR': 'bg-orange-50 text-orange-700 border-orange-200'
+    'Completado': 'bg-emerald-50 text-emerald-700 border-emerald-200'
   };
   return (
-    <span className={`px-2.5 py-1 rounded-full text-xs font-semibold border shadow-sm ${styles[status] || styles['Pendiente']}`}>
-      {status}
+    <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold border shadow-sm ${styles[status] || styles['Pendiente']}`}>
+      {status.toUpperCase()}
     </span>
   );
 };
 
-const StatCard = ({ title, value, icon: Icon, colorClass, subtext }) => (
-  <div className="bg-white p-5 rounded-xl shadow-sm border border-slate-100 flex items-start justify-between hover:shadow-md transition-shadow">
-    <div>
-      <p className="text-sm font-medium text-slate-500 mb-1">{title}</p>
-      <h3 className="text-2xl font-bold text-slate-800">{value}</h3>
-      {subtext && <p className="text-xs text-slate-400 mt-1">{subtext}</p>}
-    </div>
-    <div className={`p-3 rounded-lg ${colorClass} bg-opacity-10`}>
-      <Icon className={`w-6 h-6 ${colorClass.replace('bg-', 'text-')}`} />
-    </div>
-  </div>
-);
-
-// --- DATOS INICIALES (MOCKS) ---
-const INITIAL_CLIENTS = [
-  { id: 1, name: 'Constructora Del Norte SAC', ruc: '20100000001', driveUrl: 'https://drive.google.com' },
-  { id: 2, name: 'Agroexportadora Piura EIRL', ruc: '20601234567', driveUrl: '' },
-  { id: 3, name: 'Servicios Generales ABC', ruc: '10456789012', driveUrl: '' }
-];
-
-const INITIAL_USERS = [
-  { id: 1, username: 'admin', password: 'admin', name: 'Gerencia General', role: 'admin', assignments: [] },
-  { id: 2, username: 'asistente', password: '123', name: 'Juan Pérez', role: 'user', assignments: [{ clientId: 1, permission: 'edit' }] }
-];
-
-const INITIAL_TASKS = [
-  { id: 1, title: 'Declaración IGV-Renta Octubre', client: 'Constructora Del Norte SAC', assistant: 'Juan Pérez', dueDate: '2025-10-15', status: 'En Revisión', priority: 'Alta' },
-  { id: 2, title: 'Planilla Electrónica Plame', client: 'Agroexportadora Piura EIRL', assistant: 'Maria Lopez', dueDate: '2025-10-18', status: 'Pendiente', priority: 'Media' },
-];
-
-const INITIAL_NOTIFICATIONS = [
-  { id: 1, notificationNum: '0120250000123', client: 'Constructora Del Norte SAC', type: 'Fiscalización Parcial IGV', sunatStatus: 'EN EVALUACIÓN' }
-];
-
 // --- APLICACIÓN PRINCIPAL ---
-
-export default function AccountingApp() {
-  const [currentUser, setCurrentUser] = useState(null);
+export default function App() {
+  const [user, setUser] = useState(null);
+  const [currentUserData, setCurrentUserData] = useState(null);
   const [sidebarOpen, setSidebarOpen] = useState(true);
-  const [viewMode, setViewMode] = useState('dashboard'); // dashboard, tasks, notifications, admin, clients
+  const [viewMode, setViewMode] = useState('dashboard');
+  const [isInitializing, setIsInitializing] = useState(true);
+  const [loadError, setLoadError] = useState(null);
   
-  // Estados de datos
-  const [users, setUsers] = useState(INITIAL_USERS);
-  const [clients, setClients] = useState(INITIAL_CLIENTS);
-  const [tasks, setTasks] = useState(INITIAL_TASKS);
-  const [notifications, setNotifications] = useState(INITIAL_NOTIFICATIONS);
-  const [logs, setLogs] = useState([]);
+  // Estados de datos sincronizados con Firestore
+  const [users, setUsers] = useState([]);
+  const [clients, setClients] = useState([]);
+  const [assignments, setAssignments] = useState([]);
+  const [reports, setReports] = useState([]);
 
   // Modales
-  const [showTaskForm, setShowTaskForm] = useState(false);
-  const [showClientModal, setShowClientModal] = useState(false);
-  const [editingUser, setEditingUser] = useState(null); // Nuevo estado para edición de usuario
+  const [editingUser, setEditingUser] = useState(null);
 
-  // --- AUTO-CORRECCIÓN DE ESTILOS ---
-  // Este efecto inyecta el motor de diseño (Tailwind) automáticamente si falta en la nube.
+  // --- REGLA 3: AUTENTICACIÓN ---
   useEffect(() => {
-    const existingScript = document.getElementById('tailwind-script');
-    if (!existingScript) {
-      const script = document.createElement('script');
-      script.id = 'tailwind-script';
-      script.src = "https://cdn.tailwindcss.com";
-      script.async = true;
-      document.head.appendChild(script);
-    }
+    const initAuth = async () => {
+      try {
+        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+          await signInWithCustomToken(auth, __initial_auth_token);
+        } else {
+          await signInAnonymously(auth);
+        }
+      } catch (err) {
+        setLoadError("Error de conexión con el servidor de seguridad.");
+      }
+    };
+    initAuth();
+    const unsubscribe = onAuthStateChanged(auth, (u) => {
+      setUser(u);
+      if (!u) setIsInitializing(false);
+    });
+    return () => unsubscribe();
   }, []);
 
-  // --- LOGGING ---
-  const logAction = (action, details) => {
-    const newLog = { id: Date.now(), timestamp: new Date().toISOString(), user: currentUser.username, action, details };
-    setLogs(prev => [newLog, ...prev]);
+  // --- REGLA 1 y 4: CARGA DE DATOS ---
+  useEffect(() => {
+    if (!user) return;
+
+    // Sincronizar Usuarios y Auto-inicialización (Admin por defecto)
+    const qUsers = collection(db, 'artifacts', appId, 'public', 'data', 'users');
+    const unsubUsers = onSnapshot(qUsers, async (snap) => {
+      if (snap.empty) {
+        const adminData = {
+          uid: user.uid,
+          username: 'admin',
+          password: 'admin',
+          name: 'Gerencia General',
+          role: 'admin',
+          createdAt: Timestamp.now()
+        };
+        await addDoc(qUsers, adminData);
+        return;
+      }
+
+      const data = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      setUsers(data);
+      
+      // Buscamos al usuario actual
+      const found = data.find(u => u.uid === user.uid) || data[0];
+      setCurrentUserData(found);
+      setIsInitializing(false);
+    }, () => setLoadError("Error al sincronizar usuarios."));
+
+    // Sincronizar Clientes
+    const qClients = collection(db, 'artifacts', appId, 'public', 'data', 'clients');
+    const unsubClients = onSnapshot(qClients, (snap) => {
+      setClients(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    });
+
+    // Sincronizar Asignaciones (Regla 2: Ordenar en memoria)
+    const qAssig = collection(db, 'artifacts', appId, 'public', 'data', 'assignments');
+    const unsubAssig = onSnapshot(qAssig, (snap) => {
+      const sorted = snap.docs
+        .map(doc => ({ id: doc.id, ...doc.data() }))
+        .sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
+      setAssignments(sorted);
+    });
+
+    // Sincronizar Reportes de Labores
+    const qReports = collection(db, 'artifacts', appId, 'public', 'data', 'reports');
+    const unsubReports = onSnapshot(qReports, (snap) => {
+      const sorted = snap.docs
+        .map(doc => ({ id: doc.id, ...doc.data() }))
+        .sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
+      setReports(sorted);
+    });
+
+    return () => {
+      unsubUsers();
+      unsubClients();
+      unsubAssig();
+      unsubReports();
+    };
+  }, [user]);
+
+  // --- ACCIONES DE GUARDADO ---
+  const handleSaveAssignment = async (newAssign) => {
+    const ref = collection(db, 'artifacts', appId, 'public', 'data', 'assignments');
+    await addDoc(ref, { ...newAssign, createdAt: Timestamp.now() });
   };
 
-  // --- PERMISOS ---
-  // Verifica si el usuario actual tiene permiso para ver un cliente
-  const canViewClient = (clientName) => {
-    if (currentUser.role === 'admin') return true;
-    const client = clients.find(c => c.name === clientName);
-    if (!client) return false;
-    return currentUser.assignments.some(a => a.clientId === client.id);
+  const handleSaveReport = async (reportEntry) => {
+    const ref = collection(db, 'artifacts', appId, 'public', 'data', 'reports');
+    await addDoc(ref, { 
+      ...reportEntry, 
+      userId: user.uid, 
+      userName: currentUserData.name,
+      createdAt: Timestamp.now() 
+    });
   };
 
-  // Verifica si el usuario actual tiene permiso para EDITAR un cliente
-  const canEditClient = (clientName) => {
-    if (currentUser.role === 'admin') return true;
-    const client = clients.find(c => c.name === clientName);
-    if (!client) return false;
-    return currentUser.assignments.some(a => a.clientId === client.id && a.permission === 'edit');
-  };
-
-  // Filtrado de datos según permisos
-  const getVisibleTasks = () => tasks.filter(t => canViewClient(t.client));
-  const getVisibleNotifications = () => notifications.filter(n => canViewClient(n.client));
-  const getVisibleClients = () => currentUser.role === 'admin' ? clients : clients.filter(c => currentUser.assignments.some(a => a.clientId === c.id));
-
-
-  // --- LOGIN ---
-  if (!currentUser) {
+  if (isInitializing) {
     return (
-      <div className="min-h-screen bg-slate-100 flex items-center justify-center p-4 font-sans">
-        <div className="bg-white p-8 rounded-2xl shadow-xl w-full max-w-sm border border-slate-200">
-          <div className="flex flex-col items-center mb-8">
-            <div className="bg-blue-600 p-4 rounded-xl shadow-lg shadow-blue-200 mb-4">
-              <Shield className="text-white w-8 h-8" />
-            </div>
-            <h2 className="text-2xl font-bold text-slate-800">Acceso Seguro</h2>
-            <p className="text-sm text-slate-400">Sistema de Control Interno</p>
-          </div>
-          <LoginForm users={users} onLogin={setCurrentUser} />
+      <div className="h-screen flex items-center justify-center bg-slate-900 text-white">
+        <div className="flex flex-col items-center gap-4">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
+          <p className="text-sm font-bold tracking-widest animate-pulse uppercase">Sincronizando NYSEM...</p>
         </div>
       </div>
     );
   }
 
-  // --- NAVEGACIÓN LATERAL (SIDEBAR) ---
   const SidebarItem = ({ id, icon: Icon, label, active, onClick }) => (
     <button 
       onClick={onClick}
-      className={`w-full flex items-center gap-3 px-4 py-3 text-sm font-medium transition-colors duration-200 
-        ${active ? 'bg-blue-600 text-white shadow-md' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}
+      className={`w-full flex items-center gap-3 px-4 py-3 text-sm font-medium transition-all duration-200 
+        ${active ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}
     >
       <Icon size={20} />
       {sidebarOpen && <span>{label}</span>}
-      {active && sidebarOpen && <ChevronRight size={16} className="ml-auto opacity-50"/>}
     </button>
   );
 
   return (
     <div className="flex h-screen bg-slate-50 font-sans overflow-hidden">
-      
       {/* SIDEBAR */}
-      <aside className={`${sidebarOpen ? 'w-64' : 'w-20'} bg-slate-900 flex flex-col transition-all duration-300 shadow-2xl z-20`}>
+      <aside className={`${sidebarOpen ? 'w-64' : 'w-20'} bg-slate-900 flex flex-col transition-all duration-300 shadow-2xl z-30`}>
         <div className="h-16 flex items-center justify-center border-b border-slate-800">
-          <div className="flex items-center gap-2 font-bold text-white text-xl tracking-tight">
+          <div className="flex items-center gap-2 font-bold text-white text-xl">
             <div className="bg-blue-600 p-1.5 rounded-lg"><BarChart3 size={20} /></div>
             {sidebarOpen && <span>NYSEM</span>}
           </div>
         </div>
 
         <nav className="flex-1 py-6 space-y-1">
-          <div className="px-4 mb-2 text-xs font-semibold text-slate-500 uppercase tracking-wider">
-            {sidebarOpen ? 'Principal' : '...'}
-          </div>
-          <SidebarItem id="dashboard" icon={Home} label="Dashboard" active={viewMode === 'dashboard'} onClick={() => setViewMode('dashboard')} />
-          <SidebarItem id="tasks" icon={List} label="Tareas & Obligaciones" active={viewMode === 'tasks'} onClick={() => setViewMode('tasks')} />
-          <SidebarItem id="notifications" icon={Bell} label="Notificaciones SUNAT" active={viewMode === 'notifications'} onClick={() => setViewMode('notifications')} />
-          
-          <div className="mt-8 px-4 mb-2 text-xs font-semibold text-slate-500 uppercase tracking-wider">
-            {sidebarOpen ? 'Gestión' : '...'}
-          </div>
-          <SidebarItem id="clients" icon={Database} label="Cartera de Clientes" active={viewMode === 'clients'} onClick={() => setViewMode('clients')} />
-          {currentUser.role === 'admin' && (
-            <SidebarItem id="admin" icon={Settings} label="Administración" active={viewMode === 'admin'} onClick={() => setViewMode('admin')} />
+          <SidebarItem id="dashboard" icon={Home} label="Panel Central" active={viewMode === 'dashboard'} onClick={() => setViewMode('dashboard')} />
+          <SidebarItem id="planning" icon={CalendarIcon} label="Planificación" active={viewMode === 'planning'} onClick={() => setViewMode('planning')} />
+          <SidebarItem id="reports" icon={Timer} label="Mi Reporte" active={viewMode === 'reports'} onClick={() => setViewMode('reports')} />
+          <SidebarItem id="clients" icon={Database} label="Clientes" active={viewMode === 'clients'} onClick={() => setViewMode('clients')} />
+          {currentUserData?.role === 'admin' && (
+            <SidebarItem id="admin" icon={Settings} label="Admin" active={viewMode === 'admin'} onClick={() => setViewMode('admin')} />
           )}
         </nav>
 
         <div className="p-4 border-t border-slate-800">
-          <button 
-            onClick={() => setCurrentUser(null)}
-            className="flex items-center gap-3 text-slate-400 hover:text-white text-sm w-full transition-colors"
-          >
-            <LogOut size={20} />
-            {sidebarOpen && <span>Cerrar Sesión</span>}
-          </button>
+          <div className="flex items-center gap-3 text-slate-400 mb-4 px-2">
+            <div className="w-8 h-8 rounded-full bg-blue-500 flex items-center justify-center text-white text-xs font-bold uppercase">
+              {currentUserData?.name?.charAt(0)}
+            </div>
+            {sidebarOpen && (
+              <div className="overflow-hidden">
+                <p className="text-xs font-bold text-white truncate">{currentUserData?.name}</p>
+                <p className="text-[9px] opacity-50 uppercase">{currentUserData?.role === 'admin' ? 'Gerente' : 'Asistente'}</p>
+              </div>
+            )}
+          </div>
         </div>
       </aside>
 
-      {/* CONTENIDO PRINCIPAL */}
+      {/* ÁREA DE CONTENIDO */}
       <div className="flex-1 flex flex-col overflow-hidden">
-        {/* TOP BAR */}
-        <header className="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-6 shadow-sm z-10">
+        <header className="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-6 shadow-sm z-20">
           <button onClick={() => setSidebarOpen(!sidebarOpen)} className="text-slate-500 hover:text-blue-600 transition-colors">
             <Menu size={24} />
           </button>
-
-          <div className="flex items-center gap-4">
-            <div className="text-right hidden md:block">
-              <p className="text-sm font-bold text-slate-800">{currentUser.name}</p>
-              <p className="text-xs text-slate-500 capitalize">{currentUser.role === 'admin' ? 'Administrador' : 'Asistente Contable'}</p>
-            </div>
-            <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center text-blue-600 font-bold border border-blue-200">
-              {currentUser.name.charAt(0)}
-            </div>
+          <div className="text-sm font-medium text-slate-500">
+            {new Date().toLocaleDateString('es-PE', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
           </div>
         </header>
 
-        {/* AREA DE TRABAJO */}
-        <main className="flex-1 overflow-y-auto p-6 scroll-smooth">
-          <div className="max-w-6xl mx-auto animate-in fade-in duration-500">
+        <main className="flex-1 overflow-y-auto p-6 bg-slate-50">
+          <div className="max-w-6xl mx-auto space-y-6">
             
-            {/* VISTA DASHBOARD (Resumen Ejecutivo) */}
             {viewMode === 'dashboard' && (
-              <div className="space-y-6">
-                <div className="flex justify-between items-center">
-                  <h2 className="text-2xl font-bold text-slate-800">Resumen Ejecutivo</h2>
-                  <p className="text-sm text-slate-500">{new Date().toLocaleDateString('es-PE', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</p>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                  <StatCard 
-                    title="Tareas Pendientes" 
-                    value={getVisibleTasks().filter(t => t.status === 'Pendiente').length} 
-                    icon={Clock} 
-                    colorClass="bg-slate-600"
-                    subtext="Vencen esta semana"
-                  />
-                  <StatCard 
-                    title="En Proceso" 
-                    value={getVisibleTasks().filter(t => t.status === 'En Proceso').length} 
-                    icon={Users} 
-                    colorClass="bg-blue-600"
-                    subtext="Asignadas a equipo"
-                  />
-                  <StatCard 
-                    title="Por Revisar" 
-                    value={getVisibleTasks().filter(t => t.status === 'En Revisión').length} 
-                    icon={FileCheck} 
-                    colorClass="bg-amber-500"
-                    subtext="Requieren VB del Contador"
-                  />
-                  <StatCard 
-                    title="Notificaciones" 
-                    value={getVisibleNotifications().filter(n => n.sunatStatus !== 'FAVORABLE').length} 
-                    icon={AlertCircle} 
-                    colorClass="bg-red-600"
-                    subtext="Fiscalizaciones activas"
-                  />
-                </div>
-
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                  {/* Ultimas Tareas */}
-                  <div className="bg-white p-5 rounded-xl shadow-sm border border-slate-200">
-                    <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2">
-                      <List size={18} className="text-blue-600"/> Tareas Recientes
-                    </h3>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div className="md:col-span-2 space-y-6">
+                  <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+                    <h2 className="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
+                      <ClipboardList className="text-blue-600" size={20}/> Labores Programadas para Hoy
+                    </h2>
                     <div className="space-y-3">
-                      {getVisibleTasks().slice(0, 5).map(task => (
-                        <div key={task.id} className="flex items-center justify-between p-3 bg-slate-50 rounded-lg border border-slate-100 hover:border-blue-200 transition-colors">
-                          <div>
-                            <p className="text-sm font-semibold text-slate-700">{task.title}</p>
-                            <p className="text-xs text-slate-500">{task.client}</p>
+                      {assignments
+                        .filter(a => a.date === getTodayISO() && (currentUserData?.role === 'admin' || a.userName === currentUserData?.name))
+                        .map(a => (
+                          <div key={a.id} className="p-4 bg-slate-50 rounded-xl border border-slate-100 flex justify-between items-center hover:border-blue-300 transition-all">
+                            <div>
+                              <p className="text-sm font-bold text-slate-700">{a.taskDescription}</p>
+                              <p className="text-[10px] font-bold text-slate-400 mt-1 uppercase tracking-tighter">CLIENTE: {a.clientName}</p>
+                            </div>
+                            <Badge status="Pendiente" />
                           </div>
-                          <Badge status={task.status} />
-                        </div>
-                      ))}
+                        ))}
+                      {assignments.filter(a => a.date === getTodayISO()).length === 0 && (
+                        <p className="text-center py-10 text-slate-400 italic text-sm">No hay tareas programadas para el día de hoy.</p>
+                      )}
                     </div>
                   </div>
+                </div>
 
-                  {/* Avisos Importantes */}
-                  <div className="bg-white p-5 rounded-xl shadow-sm border border-slate-200">
-                     <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2">
-                      <Bell size={18} className="text-red-600"/> Alertas Fiscales
-                    </h3>
-                    {getVisibleNotifications().length === 0 ? (
-                      <p className="text-sm text-slate-400 italic">No hay alertas pendientes.</p>
-                    ) : (
-                      <div className="space-y-3">
-                         {getVisibleNotifications().map(n => (
-                           <div key={n.id} className="p-3 bg-red-50 rounded-lg border border-red-100">
-                             <div className="flex justify-between">
-                               <span className="text-xs font-bold text-red-700">{n.type}</span>
-                               <span className="text-xs text-red-500">{n.notificationNum}</span>
-                             </div>
-                             <p className="text-sm font-medium text-slate-800 mt-1">{n.client}</p>
-                             <div className="mt-2 flex justify-end">
-                               <span className="text-[10px] font-bold bg-white px-2 py-0.5 rounded text-red-600 border border-red-200">{n.sunatStatus}</span>
-                             </div>
-                           </div>
-                         ))}
+                <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+                  <h2 className="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
+                    <History className="text-emerald-600" size={20}/> Actividad Reciente
+                  </h2>
+                  <div className="space-y-4">
+                    {reports.slice(0, 5).map(r => (
+                      <div key={r.id} className="text-xs">
+                        <div className="flex justify-between mb-1">
+                          <span className="font-bold text-slate-700 uppercase">{r.userName}</span>
+                          <span className="text-emerald-600 font-mono">{r.time}</span>
+                        </div>
+                        <p className="text-slate-500 bg-slate-50 p-2 rounded border border-slate-100 italic">{r.description}</p>
                       </div>
-                    )}
+                    ))}
                   </div>
                 </div>
               </div>
             )}
 
-            {/* OTRAS VISTAS (Funcionales para pruebas) */}
-            {viewMode === 'tasks' && (
-              <TasksModule 
-                tasks={getVisibleTasks()} setTasks={setTasks} 
+            {viewMode === 'planning' && (
+              <PlanningModule 
+                isAdmin={currentUserData?.role === 'admin'}
+                users={users} 
                 clients={clients} 
-                currentUser={currentUser} 
-                canEditClient={canEditClient}
-                logAction={logAction}
-                onNewTask={() => setShowTaskForm(true)}
+                assignments={assignments} 
+                onSave={handleSaveAssignment} 
               />
             )}
-            
+
+            {viewMode === 'reports' && (
+              <DailyReportModule 
+                reports={reports} 
+                onSave={handleSaveReport} 
+                currentUser={currentUserData} 
+              />
+            )}
+
             {viewMode === 'clients' && (
               <ClientsModule 
-                 clients={getVisibleClients()} setClients={setClients} 
-                 currentUser={currentUser} 
-                 onNewClient={() => setShowClientModal(true)}
+                clients={clients} 
+                onAdd={async (c) => {
+                  const ref = collection(db, 'artifacts', appId, 'public', 'data', 'clients');
+                  await addDoc(ref, { ...c, createdAt: Timestamp.now() });
+                }}
               />
             )}
 
             {viewMode === 'admin' && (
-              <AdminModule 
-                users={users} setUsers={setUsers}
-                logs={logs}
-                clients={clients}
-                onNewUser={() => setEditingUser({ name: '', username: '', password: '', role: 'user', assignments: [] })}
-                onEditUser={(user) => setEditingUser(user)}
-              />
-            )}
-
-            {viewMode === 'notifications' && (
-               <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
-                 <h2 className="text-xl font-bold text-slate-800 mb-4">Central de Notificaciones SUNAT</h2>
-                 <p className="text-sm text-slate-500 mb-4">Bandeja unificada de alertas fiscales.</p>
-                 <div className="text-center py-10 bg-slate-50 rounded border border-dashed border-slate-300 text-slate-400">
-                   Módulo de Notificaciones Activo (Ver Dashboard para resumen)
-                 </div>
-               </div>
+              <div className="bg-white p-6 rounded-2xl border border-slate-200">
+                <div className="flex justify-between items-center mb-6">
+                  <h2 className="text-xl font-bold text-slate-800">Administración de Equipo</h2>
+                  <button onClick={() => setEditingUser({ name: '', username: '', password: '', role: 'user' })} className="bg-slate-900 text-white px-4 py-2 rounded-lg text-xs font-bold shadow-lg">Nuevo Colaborador</button>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {users.map(u => (
+                    <div key={u.id} className="p-4 border border-slate-100 rounded-xl bg-slate-50 flex justify-between items-center hover:bg-white transition-all hover:shadow-md">
+                      <div className="flex items-center gap-3">
+                        <div className={`p-2 rounded-lg ${u.role === 'admin' ? 'bg-purple-100 text-purple-600' : 'bg-blue-100 text-blue-600'}`}>
+                          {u.role === 'admin' ? <Shield size={16}/> : <Users size={16}/>}
+                        </div>
+                        <div>
+                          <p className="text-sm font-bold text-slate-800">{u.name}</p>
+                          <p className="text-[10px] text-slate-400 uppercase font-bold tracking-widest">{u.role}</p>
+                        </div>
+                      </div>
+                      <button onClick={() => setEditingUser(u)} className="p-2 text-slate-300 hover:text-blue-600 transition-colors"><Pencil size={14}/></button>
+                    </div>
+                  ))}
+                </div>
+              </div>
             )}
 
           </div>
         </main>
       </div>
 
-      {/* MODALES FLOTANTES */}
-      {showTaskForm && (
-        <TaskFormModal 
-            clients={getVisibleClients().filter(c => canEditClient(c.name))}
-            onClose={() => setShowTaskForm(false)}
-            onSave={(task) => {
-                setTasks([task, ...tasks]);
-                logAction('Nueva Tarea', task.title);
-                setShowTaskForm(false);
-            }}
-        />
-      )}
-      {showClientModal && (
-        <ClientFormModal
-            onClose={() => setShowClientModal(false)}
-            onSave={(client) => {
-                setClients([...clients, client]);
-                logAction('Nuevo Cliente', client.name);
-                setShowClientModal(false);
-            }}
-        />
-      )}
       {editingUser && (
-        <UserEditModal
-            user={editingUser}
-            clients={clients}
-            onClose={() => setEditingUser(null)}
-            onSave={(savedUser) => {
-                if(savedUser.id) {
-                    setUsers(users.map(u => u.id === savedUser.id ? savedUser : u));
-                    logAction('Usuario Modificado', savedUser.username);
-                } else {
-                    setUsers([...users, { ...savedUser, id: Date.now() }]);
-                    logAction('Nuevo Usuario', savedUser.username);
-                }
-                setEditingUser(null);
-            }}
-            onDelete={(userId) => {
-                 setUsers(users.filter(u => u.id !== userId));
-                 logAction('Usuario Eliminado', userId);
-                 setEditingUser(null);
-            }}
+        <UserModal 
+          user={editingUser} 
+          onClose={() => setEditingUser(null)} 
+          onSave={async (u) => {
+            const ref = collection(db, 'artifacts', appId, 'public', 'data', 'users');
+            if(u.id) await updateDoc(doc(ref, u.id), u);
+            else await addDoc(ref, { ...u, uid: crypto.randomUUID(), createdAt: Timestamp.now() });
+            setEditingUser(null);
+          }}
         />
       )}
     </div>
   );
 }
 
-// ==========================================
-// SUB-MÓDULOS DE INTERFAZ
-// ==========================================
+// --- MÓDULO: PLANIFICACIÓN (PARA GERENCIA) ---
+function PlanningModule({ isAdmin, users, clients, assignments, onSave }) {
+  const [form, setForm] = useState({ date: getTodayISO(), userName: '', clientName: '', taskDescription: '' });
 
-const LoginForm = ({ users, onLogin }) => {
-  const [u, setU] = useState('');
-  const [p, setP] = useState('');
-  const [err, setErr] = useState('');
-
-  const handle = (e) => {
-    e.preventDefault();
-    const found = users.find(user => user.username === u && user.password === p);
-    if (found) onLogin(found);
-    else setErr('Credenciales inválidas');
-  }
-
-  return (
-    <form onSubmit={handle} className="space-y-4">
-      {err && <div className="bg-red-50 text-red-600 text-xs p-2 rounded text-center">{err}</div>}
-      <div>
-        <label className="text-xs font-bold text-slate-500 uppercase">Usuario</label>
-        <input className="w-full mt-1 p-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" autoFocus value={u} onChange={e=>setU(e.target.value)}/>
-      </div>
-      <div>
-        <label className="text-xs font-bold text-slate-500 uppercase">Contraseña</label>
-        <input type="password" className="w-full mt-1 p-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" value={p} onChange={e=>setP(e.target.value)}/>
-      </div>
-      <button className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 rounded-lg transition-colors shadow-lg shadow-blue-200">Ingresar al Sistema</button>
-    </form>
+  if (!isAdmin) return (
+    <div className="bg-white p-12 rounded-3xl border border-slate-200 text-center">
+      <Lock className="mx-auto text-slate-300 mb-4" size={48} />
+      <h2 className="text-xl font-bold text-slate-800">Módulo Restringido</h2>
+      <p className="text-sm text-slate-500">Solo la Gerencia General puede realizar la asignación diaria de tareas.</p>
+    </div>
   );
-};
 
-const TasksModule = ({ tasks, setTasks, clients, currentUser, canEditClient, logAction, onNewTask }) => {
-  // Ahora usamos la función global de permisos
-  
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-      <div className="p-6 border-b border-slate-100 flex justify-between items-center">
-        <div>
-          <h2 className="text-xl font-bold text-slate-800">Control de Obligaciones</h2>
-          <p className="text-sm text-slate-500">Gestión de tareas recurrentes y vencimientos</p>
+    <div className="space-y-6">
+      <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+        <h2 className="text-lg font-bold text-slate-800 mb-6 flex items-center gap-2">
+          <CalendarIcon size={20} className="text-blue-600"/> Programación Diaria de Labores
+        </h2>
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end bg-slate-50 p-6 rounded-2xl border border-slate-100">
+          <div>
+            <label className="text-[10px] font-bold text-slate-500 uppercase block mb-1">Fecha de Ejecución</label>
+            <input type="date" value={form.date} onChange={e => setForm({...form, date: e.target.value})} className="w-full text-sm p-2 rounded-xl border-slate-200 outline-none focus:ring-2 focus:ring-blue-500 transition-all"/>
+          </div>
+          <div>
+            <label className="text-[10px] font-bold text-slate-500 uppercase block mb-1">Colaborador</label>
+            <select value={form.userName} onChange={e => setForm({...form, userName: e.target.value})} className="w-full text-sm p-2 rounded-xl border-slate-200 outline-none">
+              <option value="">Seleccionar Asistente...</option>
+              {users.map(u => <option key={u.id} value={u.name}>{u.name}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="text-[10px] font-bold text-slate-500 uppercase block mb-1">Empresa Destino</label>
+            <select value={form.clientName} onChange={e => setForm({...form, clientName: e.target.value})} className="w-full text-sm p-2 rounded-xl border-slate-200 outline-none">
+              <option value="">Seleccionar Cliente...</option>
+              {clients.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="text-[10px] font-bold text-slate-500 uppercase block mb-1">Labor a Realizar</label>
+            <input type="text" placeholder="Ej: Analizar Cuentas por Cobrar" value={form.taskDescription} onChange={e => setForm({...form, taskDescription: e.target.value})} className="w-full text-sm p-2 rounded-xl border-slate-200 outline-none"/>
+          </div>
         </div>
-        {/* Solo mostrar botón si tiene permiso de edición en AL MENOS un cliente */}
-        {(currentUser.role === 'admin' || currentUser.assignments.some(a => a.permission === 'edit')) && (
-            <button onClick={onNewTask} className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 transition-colors">
-            <Plus size={18} /> Nueva Tarea
-            </button>
-        )}
+        <div className="mt-4 flex justify-end">
+          <button 
+            onClick={() => {
+              if(!form.userName || !form.taskDescription || !form.clientName) return;
+              onSave(form);
+              setForm({...form, taskDescription: ''});
+            }}
+            className="bg-slate-900 text-white px-8 py-2.5 rounded-xl text-xs font-bold hover:bg-slate-800 transition-all shadow-lg shadow-slate-200"
+          >
+            ASIGNAR TAREA DIARIA
+          </button>
+        </div>
       </div>
-      <div className="overflow-x-auto">
-        <table className="w-full text-sm text-left">
-          <thead className="bg-slate-50 text-slate-500 font-semibold border-b border-slate-200">
-            <tr>
-              <th className="px-6 py-4">Descripción</th>
-              <th className="px-6 py-4">Responsable</th>
-              <th className="px-6 py-4">Vencimiento</th>
-              <th className="px-6 py-4">Estado</th>
-              <th className="px-6 py-4 text-center">Acciones</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-100">
-            {tasks.map(task => (
-              <tr key={task.id} className="hover:bg-slate-50 transition-colors group">
-                <td className="px-6 py-4">
-                  <div className="font-medium text-slate-800">{task.title}</div>
-                  <div className="text-xs text-slate-500 flex items-center gap-1 mt-0.5">
-                    <Database size={10}/> {task.client}
-                  </div>
-                </td>
-                <td className="px-6 py-4 text-slate-600">{task.assistant}</td>
-                <td className="px-6 py-4 text-slate-600 font-mono">{task.dueDate}</td>
-                <td className="px-6 py-4"><Badge status={task.status}/></td>
-                <td className="px-6 py-4 text-center">
-                  {canEditClient(task.client) ? (
-                     <div className="flex items-center justify-center gap-2">
-                         <select 
-                           className="text-xs border-slate-300 rounded py-1 px-2 bg-white text-slate-700"
-                           value={task.status}
-                           onChange={(e) => {
-                             setTasks(tasks.map(t => t.id === task.id ? { ...t, status: e.target.value } : t));
-                             logAction('Estado Tarea', `ID ${task.id} -> ${e.target.value}`);
-                           }}
-                         >
-                           <option value="Pendiente">Pendiente</option>
-                           <option value="En Proceso">En Proceso</option>
-                           <option value="En Revisión">En Revisión</option>
-                           <option value="Completado">Completado</option>
-                         </select>
-                         <button onClick={() => {
-                            if(confirm('¿Eliminar esta tarea?')) {
-                                setTasks(tasks.filter(t => t.id !== task.id));
-                                logAction('Tarea Eliminada', `ID ${task.id}`);
-                            }
-                         }} className="text-slate-400 hover:text-red-600 p-1"><Trash2 size={16}/></button>
-                      </div>
-                  ) : <Lock size={14} className="mx-auto text-slate-300"/>}
-                </td>
+
+      <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
+        <div className="overflow-x-auto">
+          <table className="w-full text-[11px] text-left">
+            <thead className="bg-slate-50 text-slate-400 font-bold uppercase tracking-widest text-[9px] border-b border-slate-100">
+              <tr>
+                <th className="px-6 py-4">Fecha</th>
+                <th className="px-6 py-4">Responsable</th>
+                <th className="px-6 py-4">Empresa</th>
+                <th className="px-6 py-4">Labor Específica</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody className="divide-y divide-slate-50">
+              {assignments.map(a => (
+                <tr key={a.id} className="hover:bg-slate-50 transition-colors">
+                  <td className="px-6 py-4 font-bold text-slate-500 font-mono">{a.date}</td>
+                  <td className="px-6 py-4 font-bold text-slate-800 uppercase tracking-tighter">{a.userName}</td>
+                  <td className="px-6 py-4 text-slate-600 font-medium">{a.clientName}</td>
+                  <td className="px-6 py-4 italic text-slate-400">{a.taskDescription}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   );
-};
+}
 
-const ClientsModule = ({ clients, setClients, currentUser, onNewClient }) => (
-  <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
-    <div className="flex justify-between items-center mb-6">
-        <h2 className="text-xl font-bold text-slate-800">Cartera de Clientes</h2>
-        {currentUser.role === 'admin' && (
-            <button onClick={onNewClient} className="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-2 rounded-lg text-sm font-medium flex items-center gap-2 transition-colors">
-            <Plus size={18} /> Nuevo Cliente
-            </button>
-        )}
-    </div>
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-      {clients.map(c => (
-        <div key={c.id} className="border border-slate-200 rounded-lg p-4 hover:border-blue-300 hover:shadow-md transition-all group bg-white">
-          <div className="flex justify-between items-start mb-2">
-            <div className="w-10 h-10 bg-slate-100 rounded-lg flex items-center justify-center text-slate-500 group-hover:bg-blue-50 group-hover:text-blue-600 transition-colors">
-              <Database size={20} />
+// --- MÓDULO: REPORTE DIARIO (PARA ASISTENTES) ---
+function DailyReportModule({ reports, onSave, currentUser }) {
+  const [form, setForm] = useState({ time: '', description: '', date: getTodayISO() });
+
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 animate-in fade-in duration-500">
+      <div className="md:col-span-1">
+        <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm sticky top-6">
+          <h2 className="text-lg font-bold text-slate-800 mb-6 flex items-center gap-2">
+            <Timer size={20} className="text-emerald-600"/> Mi Reporte de Producción
+          </h2>
+          <p className="text-[10px] text-slate-400 mb-6 uppercase tracking-widest font-bold">Registro de Actividades del Día</p>
+          <div className="space-y-4">
+            <div>
+              <label className="text-[10px] font-bold text-slate-500 uppercase block mb-1">Hora Actual</label>
+              <input type="time" value={form.time} onChange={e => setForm({...form, time: e.target.value})} className="w-full p-2 border border-slate-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-emerald-500 transition-all"/>
             </div>
-            {c.driveUrl && (
-              <a href={c.driveUrl} target="_blank" className="text-slate-300 hover:text-blue-600 transition-colors">
-                <ExternalLink size={18} />
-              </a>
-            )}
-          </div>
-          <h3 className="font-bold text-slate-800 truncate" title={c.name}>{c.name}</h3>
-          <p className="text-xs text-slate-500 font-mono mt-1">RUC: {c.ruc}</p>
-          <div className="mt-4 pt-3 border-t border-slate-50 flex gap-2">
-            <span className="text-[10px] bg-slate-100 px-2 py-1 rounded text-slate-600">Contabilidad</span>
-            <span className="text-[10px] bg-slate-100 px-2 py-1 rounded text-slate-600">Laboral</span>
-          </div>
-        </div>
-      ))}
-    </div>
-  </div>
-);
-
-const AdminModule = ({ users, logs, onNewUser, onEditUser }) => (
-  <div className="space-y-6">
-    <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
-      <div className="flex justify-between items-center mb-4">
-        <h2 className="text-xl font-bold text-slate-800">Usuarios del Sistema</h2>
-        <button onClick={onNewUser} className="bg-purple-600 hover:bg-purple-700 text-white px-3 py-2 rounded-lg text-sm font-medium flex items-center gap-2 transition-colors">
-          <Plus size={18} /> Nuevo Usuario
-        </button>
-      </div>
-      <div className="flex gap-4 flex-wrap">
-        {users.map(u => (
-          <div key={u.id} className="flex items-center justify-between gap-3 p-3 border border-slate-200 rounded-lg min-w-[250px] bg-white hover:shadow-md transition">
-            <div className="flex items-center gap-3">
-                <div className={`p-2 rounded-full ${u.role === 'admin' ? 'bg-purple-100 text-purple-700' : 'bg-blue-50 text-blue-600'}`}>
-                {u.role === 'admin' ? <Shield size={16}/> : <Users size={16}/>}
-                </div>
-                <div>
-                    <p className="text-sm font-bold text-slate-800">{u.name}</p>
-                    <p className="text-xs text-slate-500">@{u.username}</p>
-                    {u.role !== 'admin' && (
-                        <p className="text-[10px] text-slate-400 mt-1">
-                            {u.assignments.length} Clientes asignados
-                        </p>
-                    )}
-                </div>
+            <div>
+              <label className="text-[10px] font-bold text-slate-500 uppercase block mb-1">Descripción de la Tarea Realizada</label>
+              <textarea 
+                rows="5" 
+                placeholder="Ej: Revisión de buzón SOL, descarga de facturas..." 
+                value={form.description} 
+                onChange={e => setForm({...form, description: e.target.value})}
+                className="w-full p-3 border border-slate-200 rounded-2xl text-sm outline-none focus:ring-2 focus:ring-emerald-500 transition-all"
+              ></textarea>
             </div>
             <button 
-                onClick={() => onEditUser(u)}
-                className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-slate-50 rounded-lg transition-colors"
-                title="Editar permisos"
+              onClick={() => {
+                if(!form.time || !form.description) return;
+                onSave(form);
+                setForm({...form, description: '', time: ''});
+              }}
+              className="w-full bg-emerald-600 text-white py-3 rounded-2xl text-xs font-bold shadow-xl shadow-emerald-50 hover:bg-emerald-700 transition-all"
             >
-                <Pencil size={16}/>
+              REGISTRAR EN BITÁCORA
             </button>
           </div>
-        ))}
+        </div>
       </div>
-    </div>
 
-    <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-      <div className="p-4 bg-slate-50 border-b border-slate-200">
-        <h3 className="font-bold text-slate-700 flex items-center gap-2"><History size={16}/> Auditoría de Cambios</h3>
-      </div>
-      <div className="max-h-60 overflow-y-auto">
-        <table className="w-full text-xs text-left">
-          <tbody className="divide-y divide-slate-100">
-            {logs.length === 0 ? (
-              <tr><td className="p-4 text-center text-slate-400">Sin registros recientes</td></tr>
-            ) : logs.map(log => (
-              <tr key={log.id}>
-                <td className="px-4 py-2 font-mono text-slate-500">{formatDateTime(log.timestamp)}</td>
-                <td className="px-4 py-2 font-bold text-slate-700">{log.user}</td>
-                <td className="px-4 py-2 text-blue-600">{log.action}</td>
-                <td className="px-4 py-2 text-slate-600 truncate max-w-xs">{log.details}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  </div>
-);
-
-// --- MODALES (NUEVOS COMPONENTES) ---
-
-const TaskFormModal = ({ onClose, onSave, clients }) => {
-    const [formData, setFormData] = useState({ title: '', client: clients[0]?.name || '', assistant: '', dueDate: '', status: 'Pendiente' });
-    
-    // Si no hay clientes disponibles para editar, mostrar mensaje
-    if(clients.length === 0) return (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-             <div className="bg-white rounded-xl shadow-2xl p-6 text-center">
-                <Lock size={32} className="mx-auto text-slate-400 mb-2"/>
-                <h3 className="text-lg font-bold">Sin Permisos</h3>
-                <p className="text-sm text-slate-500 mb-4">No tiene asignado ningún cliente con permiso de EDICIÓN.</p>
-                <button onClick={onClose} className="px-4 py-2 bg-slate-100 rounded-lg">Cerrar</button>
+      <div className="md:col-span-2">
+        <div className="bg-white rounded-3xl border border-slate-200 min-h-[500px] shadow-sm overflow-hidden">
+          <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
+            <h3 className="font-bold text-slate-800">Línea de Tiempo de Labores</h3>
+            <span className="text-[10px] font-bold bg-white border border-slate-200 px-3 py-1 rounded-full text-slate-500 uppercase tracking-widest">{getTodayISO()}</span>
+          </div>
+          <div className="p-8">
+             <div className="relative border-l-2 border-slate-100 ml-4 space-y-10">
+               {reports
+                .filter(r => r.date === getTodayISO() && (currentUser?.role === 'admin' || r.userName === currentUser?.name))
+                .map(r => (
+                  <div key={r.id} className="relative pl-8">
+                    <div className="absolute -left-[11px] top-0 w-5 h-5 rounded-full bg-white border-4 border-emerald-500 shadow-md"></div>
+                    <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm hover:shadow-lg transition-all">
+                      <div className="flex justify-between items-center mb-2">
+                        <span className="text-xs font-mono font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-lg">{r.time}</span>
+                        {currentUser?.role === 'admin' && <span className="text-[10px] font-bold text-blue-500 uppercase bg-blue-50 px-2 py-0.5 rounded-lg">{r.userName}</span>}
+                      </div>
+                      <p className="text-sm text-slate-600 leading-relaxed font-medium">{r.description}</p>
+                    </div>
+                  </div>
+                ))}
+                {reports.filter(r => r.date === getTodayISO()).length === 0 && (
+                  <div className="text-center py-20 opacity-20 text-slate-400">
+                    <ClipboardList className="mx-auto mb-4" size={64} />
+                    <p className="text-sm font-bold uppercase tracking-widest">Sin registros registrados hoy</p>
+                  </div>
+                )}
              </div>
+          </div>
         </div>
-    );
+      </div>
+    </div>
+  );
+}
 
-    return (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-xl shadow-2xl w-full max-w-md p-6">
-                <div className="flex justify-between items-center mb-4">
-                    <h3 className="text-lg font-bold text-slate-800">Nueva Tarea</h3>
-                    <button onClick={onClose}><X size={20} className="text-slate-400 hover:text-slate-600"/></button>
-                </div>
-                <div className="space-y-4">
-                    <div>
-                        <label className="text-xs font-bold text-slate-500 uppercase block mb-1">Cliente</label>
-                        <select className="w-full border-slate-300 rounded-lg p-2 text-sm" value={formData.client} onChange={e => setFormData({...formData, client: e.target.value})}>
-                            {clients.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
-                        </select>
-                    </div>
-                    <div>
-                        <label className="text-xs font-bold text-slate-500 uppercase block mb-1">Descripción</label>
-                        <input type="text" className="w-full border-slate-300 rounded-lg p-2 text-sm" placeholder="Ej: Declaración Mensual" value={formData.title} onChange={e => setFormData({...formData, title: e.target.value})} />
-                    </div>
-                    <div>
-                        <label className="text-xs font-bold text-slate-500 uppercase block mb-1">Responsable</label>
-                        <input type="text" className="w-full border-slate-300 rounded-lg p-2 text-sm" placeholder="Nombre del Asistente" value={formData.assistant} onChange={e => setFormData({...formData, assistant: e.target.value})} />
-                    </div>
-                    <div>
-                        <label className="text-xs font-bold text-slate-500 uppercase block mb-1">Vencimiento</label>
-                        <input type="date" className="w-full border-slate-300 rounded-lg p-2 text-sm" value={formData.dueDate} onChange={e => setFormData({...formData, dueDate: e.target.value})} />
-                    </div>
-                    <div className="flex justify-end gap-2 mt-6">
-                        <button onClick={onClose} className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg text-sm font-medium">Cancelar</button>
-                        <button onClick={() => onSave({...formData, id: Date.now()})} className="px-4 py-2 bg-blue-600 text-white hover:bg-blue-700 rounded-lg text-sm font-medium">Guardar Tarea</button>
-                    </div>
-                </div>
+// --- OTROS MÓDULOS DE SOPORTE ---
+function ClientsModule({ clients, onAdd }) {
+  const [showAdd, setShowAdd] = useState(false);
+  const [form, setForm] = useState({ name: '', ruc: '' });
+
+  return (
+    <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+       <div className="flex justify-between items-center mb-8">
+          <h2 className="text-xl font-bold text-slate-800">Cartera de Clientes NYSEM</h2>
+          <button onClick={() => setShowAdd(!showAdd)} className="bg-emerald-600 text-white px-4 py-2 rounded-lg text-xs font-bold hover:bg-emerald-700 transition-colors shadow-lg">
+            {showAdd ? 'Cerrar' : '+ Registrar Nueva Empresa'}
+          </button>
+       </div>
+
+       {showAdd && (
+         <div className="bg-slate-50 p-6 rounded-2xl border border-slate-100 mb-8 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 items-end animate-in slide-in-from-top duration-300">
+            <div className="space-y-1">
+              <label className="text-[10px] font-bold text-slate-500 uppercase ml-2 tracking-widest">Razón Social</label>
+              <input type="text" value={form.name} onChange={e => setForm({...form, name: e.target.value})} className="w-full p-2 rounded-xl border-slate-200 text-sm"/>
             </div>
-        </div>
-    );
-};
-
-const ClientFormModal = ({ onClose, onSave }) => {
-    const [formData, setFormData] = useState({ name: '', ruc: '', driveUrl: '' });
-
-    return (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-xl shadow-2xl w-full max-w-md p-6">
-                <div className="flex justify-between items-center mb-4">
-                    <h3 className="text-lg font-bold text-slate-800">Nuevo Cliente</h3>
-                    <button onClick={onClose}><X size={20} className="text-slate-400 hover:text-slate-600"/></button>
-                </div>
-                <div className="space-y-4">
-                    <div>
-                        <label className="text-xs font-bold text-slate-500 uppercase block mb-1">Razón Social</label>
-                        <input type="text" className="w-full border-slate-300 rounded-lg p-2 text-sm" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} />
-                    </div>
-                    <div>
-                        <label className="text-xs font-bold text-slate-500 uppercase block mb-1">RUC</label>
-                        <input type="text" className="w-full border-slate-300 rounded-lg p-2 text-sm" value={formData.ruc} onChange={e => setFormData({...formData, ruc: e.target.value})} />
-                    </div>
-                    <div>
-                        <label className="text-xs font-bold text-slate-500 uppercase block mb-1">Carpeta Drive (Link)</label>
-                        <input type="text" className="w-full border-slate-300 rounded-lg p-2 text-sm" placeholder="https://..." value={formData.driveUrl} onChange={e => setFormData({...formData, driveUrl: e.target.value})} />
-                    </div>
-                    <div className="flex justify-end gap-2 mt-6">
-                        <button onClick={onClose} className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg text-sm font-medium">Cancelar</button>
-                        <button onClick={() => onSave({...formData, id: Date.now()})} className="px-4 py-2 bg-emerald-600 text-white hover:bg-emerald-700 rounded-lg text-sm font-medium">Registrar Cliente</button>
-                    </div>
-                </div>
+            <div className="space-y-1">
+              <label className="text-[10px] font-bold text-slate-500 uppercase ml-2 tracking-widest">RUC</label>
+              <input type="text" value={form.ruc} onChange={e => setForm({...form, ruc: e.target.value})} className="w-full p-2 rounded-xl border-slate-200 text-sm" placeholder="20XXXXXXXXX"/>
             </div>
-        </div>
-    );
-};
+            <button onClick={() => { if(form.name && form.ruc) { onAdd(form); setForm({name:'', ruc:''}); setShowAdd(false); } }} className="bg-slate-900 text-white py-2 rounded-xl text-xs font-bold hover:bg-slate-800 transition-all">Guardar Empresa</button>
+         </div>
+       )}
 
-const UserEditModal = ({ user, clients, onSave, onClose, onDelete }) => {
-    const [formData, setFormData] = useState({ ...user });
-
-    const toggleAssignment = (clientId) => {
-        const exists = formData.assignments.find(a => a.clientId === clientId);
-        if (exists) {
-            // Remover
-            setFormData({
-                ...formData,
-                assignments: formData.assignments.filter(a => a.clientId !== clientId)
-            });
-        } else {
-            // Agregar (Default Read Only)
-            setFormData({
-                ...formData,
-                assignments: [...formData.assignments, { clientId, permission: 'read_only' }]
-            });
-        }
-    };
-
-    const changePermission = (clientId, perm) => {
-        setFormData({
-            ...formData,
-            assignments: formData.assignments.map(a => 
-                a.clientId === clientId ? { ...a, permission: perm } : a
-            )
-        });
-    };
-
-    return (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl p-6 flex flex-col max-h-[90vh]">
-                <div className="flex justify-between items-center mb-4 border-b border-slate-100 pb-2">
-                    <h3 className="text-lg font-bold text-slate-800">
-                        {formData.id ? 'Editar Usuario y Permisos' : 'Nuevo Usuario'}
-                    </h3>
-                    <button onClick={onClose}><X size={20} className="text-slate-400 hover:text-slate-600"/></button>
-                </div>
-                
-                <div className="overflow-y-auto flex-1 pr-2">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-                        <div>
-                            <label className="text-xs font-bold text-slate-500 uppercase block mb-1">Nombre Completo</label>
-                            <input type="text" className="w-full border-slate-300 rounded-lg p-2 text-sm" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} />
-                        </div>
-                        <div>
-                            <label className="text-xs font-bold text-slate-500 uppercase block mb-1">Usuario (Login)</label>
-                            <input type="text" className="w-full border-slate-300 rounded-lg p-2 text-sm" value={formData.username} onChange={e => setFormData({...formData, username: e.target.value})} />
-                        </div>
-                        <div>
-                            <label className="text-xs font-bold text-slate-500 uppercase block mb-1">Contraseña</label>
-                            <input type="text" className="w-full border-slate-300 rounded-lg p-2 text-sm" value={formData.password} onChange={e => setFormData({...formData, password: e.target.value})} />
-                        </div>
-                        <div>
-                            <label className="text-xs font-bold text-slate-500 uppercase block mb-1">Rol Global</label>
-                            <select className="w-full border-slate-300 rounded-lg p-2 text-sm" value={formData.role} onChange={e => setFormData({...formData, role: e.target.value})}>
-                                <option value="user">Asistente (Restringido)</option>
-                                <option value="admin">Administrador (Total)</option>
-                            </select>
-                        </div>
-                    </div>
-
-                    {/* SECCIÓN DE ASIGNACIÓN DE CLIENTES (SOLO SI NO ES ADMIN) */}
-                    {formData.role === 'user' && (
-                        <div className="bg-slate-50 p-4 rounded-xl border border-slate-200">
-                            <h4 className="font-bold text-sm text-slate-700 mb-3 flex items-center gap-2">
-                                <Database size={16}/> Asignación de Cartera
-                            </h4>
-                            <p className="text-xs text-slate-500 mb-3">Marque los clientes que este usuario puede ver. Defina si puede solo leer o editar.</p>
-                            
-                            <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
-                                {clients.map(client => {
-                                    const assignment = formData.assignments.find(a => a.clientId === client.id);
-                                    const isAssigned = !!assignment;
-
-                                    return (
-                                        <div key={client.id} className={`flex items-center justify-between p-2 rounded-lg border transition-all ${isAssigned ? 'bg-white border-blue-200 shadow-sm' : 'border-transparent hover:bg-slate-100'}`}>
-                                            <div className="flex items-center gap-3">
-                                                <input 
-                                                    type="checkbox" 
-                                                    checked={isAssigned} 
-                                                    onChange={() => toggleAssignment(client.id)}
-                                                    className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500 cursor-pointer"
-                                                />
-                                                <span className={`text-sm ${isAssigned ? 'font-bold text-slate-800' : 'text-slate-500'}`}>{client.name}</span>
-                                            </div>
-                                            
-                                            {isAssigned && (
-                                                <select 
-                                                    value={assignment.permission}
-                                                    onChange={(e) => changePermission(client.id, e.target.value)}
-                                                    className={`text-xs border-0 rounded px-2 py-1 font-bold cursor-pointer ${assignment.permission === 'edit' ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-600'}`}
-                                                >
-                                                    <option value="read_only">👁️ Solo Lectura</option>
-                                                    <option value="edit">✏️ Edición Total</option>
-                                                </select>
-                                            )}
-                                        </div>
-                                    );
-                                })}
-                            </div>
-                        </div>
-                    )}
-                </div>
-
-                <div className="flex justify-between mt-6 pt-4 border-t border-slate-100">
-                     {formData.id && formData.username !== 'admin' ? (
-                        <button onClick={() => { if(confirm('¿Eliminar usuario permanentemente?')) onDelete(formData.id); }} className="text-red-500 hover:text-red-700 text-sm flex items-center gap-1">
-                            <Trash2 size={16}/> Eliminar
-                        </button>
-                     ) : <div></div>}
-
-                    <div className="flex gap-2">
-                        <button onClick={onClose} className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg text-sm font-medium">Cancelar</button>
-                        <button onClick={() => onSave(formData)} className="px-4 py-2 bg-blue-600 text-white hover:bg-blue-700 rounded-lg text-sm font-medium">Guardar Cambios</button>
-                    </div>
-                </div>
+       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+          {clients.map(c => (
+            <div key={c.id} className="p-6 border border-slate-100 rounded-3xl hover:border-blue-300 hover:shadow-xl transition-all group bg-white">
+               <div className="flex justify-between items-start mb-6">
+                 <div className="bg-slate-100 p-3 rounded-2xl text-slate-400 group-hover:bg-blue-600 group-hover:text-white transition-all"><Database size={32}/></div>
+                 <ExternalLink size={20} className="text-slate-200 group-hover:text-blue-400 transition-colors"/>
+               </div>
+               <h3 className="font-bold text-lg text-slate-800 truncate uppercase" title={c.name}>{c.name}</h3>
+               <p className="text-xs text-slate-400 font-mono mt-1 tracking-widest font-bold">RUC {c.ruc}</p>
             </div>
-        </div>
-    );
-};
+          ))}
+       </div>
+    </div>
+  );
+}
+
+function UserModal({ user, onClose, onSave }) {
+  const [formData, setFormData] = useState({ ...user });
+  return (
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+       <div className="bg-white rounded-[40px] shadow-2xl w-full max-w-lg p-10 transform transition-all scale-100">
+          <div className="text-center mb-8">
+            <h3 className="text-2xl font-bold text-slate-800">Ficha del Personal</h3>
+            <p className="text-sm text-slate-500">Credenciales Corporativas NYSEM</p>
+          </div>
+          <div className="space-y-6">
+             <div className="space-y-1">
+               <label className="text-[10px] font-bold text-slate-400 uppercase ml-2 tracking-widest">Nombre Completo</label>
+               <input type="text" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} className="w-full p-3 border-slate-200 rounded-2xl bg-slate-50 outline-none focus:bg-white focus:ring-2 focus:ring-blue-500 transition-all"/>
+             </div>
+             <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-slate-400 uppercase ml-2 tracking-widest">Usuario</label>
+                  <input type="text" value={formData.username} onChange={e => setFormData({...formData, username: e.target.value})} className="w-full p-3 border-slate-200 rounded-2xl bg-slate-50 outline-none focus:bg-white transition-all"/>
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-slate-400 uppercase ml-2 tracking-widest">Contraseña</label>
+                  <input type="text" value={formData.password} onChange={e => setFormData({...formData, password: e.target.value})} className="w-full p-3 border-slate-200 rounded-2xl bg-slate-50 outline-none focus:bg-white transition-all"/>
+                </div>
+             </div>
+             <div className="space-y-1">
+                <label className="text-[10px] font-bold text-slate-400 uppercase ml-2 tracking-widest">Rol</label>
+                <select value={formData.role} onChange={e => setFormData({...formData, role: e.target.value})} className="w-full p-3 border-slate-200 rounded-2xl bg-slate-50 outline-none transition-all appearance-none cursor-pointer">
+                  <option value="user">Asistente Contable</option>
+                  <option value="admin">CPC (Gerente)</option>
+                </select>
+             </div>
+          </div>
+          <div className="flex justify-end gap-4 mt-10">
+             <button onClick={onClose} className="px-8 py-3 text-slate-400 font-bold hover:text-slate-600 transition-colors uppercase text-xs tracking-widest">Cancelar</button>
+             <button onClick={() => onSave(formData)} className="bg-slate-900 text-white px-10 py-3 rounded-2xl font-bold shadow-xl shadow-slate-200 hover:bg-slate-800 transition-all text-xs tracking-widest uppercase">Guardar Perfil</button>
+          </div>
+       </div>
+    </div>
+  );
+}
