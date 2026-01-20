@@ -18,21 +18,22 @@ import {
 
 /**
  * NYSEM MONTALBAN EIRL - SISTEMA DE GESTIÓN DE PRODUCCIÓN (SGP)
- * VERSIÓN 13.6.0 - EXECUTIVE PRODUCTION EDITION
+ * VERSIÓN 13.7.0 - PROTOCOLO REACT_APP PARA VERCEL
  * PROYECTO OBJETIVO: nysem-sgp-prod
  */
 
-// --- CONFIGURACIÓN DE SEGURIDAD (MAPEO EXACTO A VERCEL CUSTOM KEYS) ---
+// --- CONFIGURACIÓN DE SEGURIDAD (ESTÁNDAR REQUERIDO PARA DESPLIEGUE WEB) ---
 const firebaseConfig = {
-  apiKey: process.env.REACTAPPFIREBASEAPIKEY || process.env.VITE_FIREBASE_API_KEY || (typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config).apiKey : ""),
-  authDomain: process.env.VITEFIREBASEAUTHDOMAIN || (typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config).authDomain : ""),
-  projectId: process.env.VITEFIREBASEPROJECTID || (typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config).projectId : ""),
-  storageBucket: process.env.VITEFIREBASESTORAGEBUCKET || (typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config).storageBucket : ""),
-  messagingSenderId: process.env.VITEFIREBASEMESSAGINGSENDERID || (typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config).messagingSenderId : ""),
-  appId: process.env.VITEFIREBASEAPPID || (typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config).appId : "")
+  // El prefijo REACT_APP_ es obligatorio para que las variables sean visibles en el navegador
+  apiKey: process.env.REACT_APP_FIREBASE_API_KEY || (typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config).apiKey : ""),
+  authDomain: process.env.REACT_APP_FIREBASE_AUTH_DOMAIN || (typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config).authDomain : ""),
+  projectId: process.env.REACT_APP_FIREBASE_PROJECT_ID || (typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config).projectId : ""),
+  storageBucket: process.env.REACT_APP_FIREBASE_STORAGE_BUCKET || (typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config).storageBucket : ""),
+  messagingSenderId: process.env.REACT_APP_FIREBASE_MESSAGING_SENDER_ID || (typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config).messagingSenderId : ""),
+  appId: process.env.REACT_APP_FIREBASE_APP_ID || (typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config).appId : "")
 };
 
-// Validación de Infraestructura
+// Validación de Infraestructura Crítica
 const isConfigValid = !!firebaseConfig.apiKey && !!firebaseConfig.projectId;
 
 let app, auth, db;
@@ -74,7 +75,7 @@ export default function App() {
     const lastDigit = parseInt(rucStr.charAt(rucStr.length - 1));
     if (isNaN(lastDigit)) return { color: 'slate', text: 'RUC Inválido', level: 0 };
     
-    // Basado en cronograma de vencimientos SUNAT
+    // Basado en cronograma de vencimientos SUNAT (Perú)
     if ([0, 1, 2].includes(lastDigit)) return { color: 'rose', text: 'CRÍTICO: VENCE HOY', level: 3 }; 
     if ([3, 4, 5, 6].includes(lastDigit)) return { color: 'amber', text: 'PRÓXIMO VENCIMIENTO', level: 2 }; 
     return { color: 'blue', text: 'DENTRO DE PLAZO', level: 1 }; 
@@ -185,20 +186,20 @@ export default function App() {
         <div className="max-w-2xl w-full bg-slate-900 p-12 rounded-[3.5rem] border border-slate-800 shadow-2xl">
           <div className="flex items-center gap-6 mb-10 text-amber-400">
             <Settings className="animate-spin-slow" size={52} />
-            <h1 className="text-2xl font-black uppercase tracking-tighter">Conexión Vercel Pendiente</h1>
+            <h1 className="text-2xl font-black uppercase tracking-tighter leading-none">Conexión Vercel Pendiente</h1>
           </div>
           <p className="text-slate-400 text-sm mb-10 leading-relaxed italic">
-            Colega Montalbán, el sistema detecta que faltan las variables de entorno en el panel de Vercel para el proyecto <span className="text-blue-400 font-bold">nysem-sgp-prod</span>. Verifique los nombres:
+            Colega Montalbán, el sistema requiere que las variables en Vercel utilicen el prefijo obligatorio <span className="text-blue-400 font-bold">REACT_APP_</span> para el proyecto <span className="text-blue-400 font-bold">nysem-sgp-prod</span>. Verifique los nombres:
           </p>
           <div className="bg-black/40 p-8 rounded-[2rem] mb-12 space-y-4 font-mono text-[10px] border border-slate-800 shadow-inner">
              <div className="grid grid-cols-2 gap-4 text-slate-500 font-black uppercase tracking-tighter">
-                <div className="flex flex-col gap-1"><span>REACTAPPFIREBASEAPIKEY</span> <span className={firebaseConfig.apiKey ? 'text-emerald-500':'text-rose-500'}>{firebaseConfig.apiKey ? '[OK]':'[FALTA]'}</span></div>
-                <div className="flex flex-col gap-1"><span>VITEFIREBASEPROJECTID</span> <span className={firebaseConfig.projectId ? 'text-emerald-500':'text-rose-500'}>{firebaseConfig.projectId ? '[OK]':'[FALTA]'}</span></div>
-                <div className="flex flex-col gap-1"><span>VITEFIREBASEAUTHDOMAIN</span> <span>PENDIENTE</span></div>
-                <div className="flex flex-col gap-1"><span>VITEFIREBASEAPPID</span> <span>PENDIENTE</span></div>
+                <div className="flex flex-col gap-1"><span>REACT_APP_FIREBASE_API_KEY</span> <span className={firebaseConfig.apiKey ? 'text-emerald-500':'text-rose-500'}>{firebaseConfig.apiKey ? '[OK]':'[FALTA]'}</span></div>
+                <div className="flex flex-col gap-1"><span>REACT_APP_FIREBASE_PROJECT_ID</span> <span className={firebaseConfig.projectId ? 'text-emerald-500':'text-rose-500'}>{firebaseConfig.projectId ? '[OK]':'[FALTA]'}</span></div>
+                <div className="flex flex-col gap-1"><span>REACT_APP_FIREBASE_AUTH_DOMAIN</span> <span className={firebaseConfig.authDomain ? 'text-emerald-500':'text-rose-500'}>{firebaseConfig.authDomain ? '[OK]':'[FALTA]'}</span></div>
+                <div className="flex flex-col gap-1"><span>REACT_APP_FIREBASE_APP_ID</span> <span className={firebaseConfig.appId ? 'text-emerald-500':'text-rose-500'}>{firebaseConfig.appId ? '[OK]':'[FALTA]'}</span></div>
              </div>
           </div>
-          <p className="text-[10px] text-slate-600 uppercase font-black tracking-widest text-center">Nysem Montalbán EIRL - v13.6.0</p>
+          <p className="text-center text-[10px] text-slate-600 uppercase font-black tracking-widest">Protocolo de Despliegue Nysem v13.7.0</p>
         </div>
       </div>
     );
@@ -290,7 +291,6 @@ export default function App() {
           </header>
 
           <div className="flex-1 overflow-y-auto p-10 custom-scrollbar">
-            
             {/* DASHBOARD */}
             {viewMode === 'dashboard' && (
                 <div className="space-y-10 animate-in fade-in duration-700">
@@ -313,75 +313,6 @@ export default function App() {
                               {clients.filter(c => c.taxStatus === 'declared').length}
                             </div>
                         </div>
-                        <div className="bg-white p-10 rounded-[3.5rem] border border-slate-200 shadow-sm hover:shadow-2xl transition-all group overflow-hidden relative">
-                            <h3 className="text-slate-400 text-[10px] font-black uppercase mb-4 tracking-widest">Labores Hoy</h3>
-                            <div className="text-5xl font-black text-slate-800 tracking-tighter">{reports.filter(r => r.date === getTodayISO()).length}</div>
-                        </div>
-                    </div>
-
-                    <div className="bg-white p-12 rounded-[4rem] border border-slate-200 shadow-sm">
-                        <h2 className="text-2xl font-black text-slate-800 mb-10 flex items-center gap-5 uppercase tracking-tighter"><History size={32} className="text-blue-600"/> Registro de Producción</h2>
-                        <div className="space-y-6">
-                            {reports.length > 0 ? reports.slice(0, 10).map(r => (
-                                <div key={r.id} className="p-6 bg-slate-50 rounded-[2rem] flex justify-between items-center border border-slate-100 group hover:bg-white hover:border-blue-200 transition-all shadow-sm">
-                                    <div className="flex items-center gap-6">
-                                        <div className="w-14 h-14 rounded-2xl bg-white border flex items-center justify-center text-blue-600 font-black text-lg uppercase shadow-sm group-hover:bg-blue-600 group-hover:text-white transition-all">{r.userName?.charAt(0)}</div>
-                                        <div>
-                                            <p className="text-lg font-bold text-slate-800 leading-none group-hover:text-blue-700 transition-colors">"{String(r.description)}"</p>
-                                            <p className="text-[11px] font-black text-slate-400 uppercase mt-3 tracking-widest leading-none">{r.userName} | {r.clientName}</p>
-                                        </div>
-                                    </div>
-                                    <span className="text-[11px] font-mono font-black text-slate-400 bg-white px-5 py-2.5 rounded-full border border-slate-100 tracking-widest">{String(r.time)}</span>
-                                </div>
-                            )) : (
-                                <div className="py-20 text-center text-slate-300 font-black uppercase text-xs tracking-[0.2em] italic">Sin actividad registrada en el nodo</div>
-                            )}
-                        </div>
-                    </div>
-                </div>
-            )}
-
-            {/* CARTERA */}
-            {viewMode === 'clients' && (
-                <div className="max-w-7xl mx-auto space-y-12 animate-in fade-in duration-700 pb-20">
-                    <div className="bg-white p-12 rounded-[4rem] border border-slate-200 shadow-xl shadow-slate-200/50 relative overflow-hidden">
-                        <h2 className="text-4xl font-black text-slate-800 mb-12 flex items-center gap-6 text-blue-600 tracking-tighter uppercase"><Building2 size={52} className="bg-blue-50 p-3 rounded-2xl"/> Alta de Empresas</h2>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
-                            <div className="space-y-2">
-                                <label className="text-[11px] font-black text-slate-400 ml-6 uppercase tracking-widest">Razón Social</label>
-                                <input type="text" placeholder="Ej: Consorcio Agrícola Montalbán" value={clientForm.name} onChange={e => setClientForm({...clientForm, name: e.target.value})} className="w-full p-6 bg-slate-50 rounded-[2.5rem] border-none font-bold text-slate-700 shadow-inner focus:ring-4 ring-blue-500/10 transition-all"/>
-                            </div>
-                            <div className="space-y-2">
-                                <label className="text-[11px] font-black text-slate-400 ml-6 uppercase tracking-widest">Número de RUC</label>
-                                <input type="text" placeholder="20XXXXXXXXX" value={clientForm.ruc} onChange={e => setClientForm({...clientForm, ruc: e.target.value})} className="w-full p-6 bg-slate-50 rounded-[2.5rem] border-none font-bold text-slate-700 shadow-inner focus:ring-4 ring-blue-500/10 transition-all"/>
-                            </div>
-                        </div>
-                        <button onClick={handleAddClient} className="mt-12 w-full bg-blue-600 text-white py-8 rounded-[3rem] font-black text-xs uppercase tracking-[0.4em] shadow-2xl hover:bg-blue-700 transition-all active:scale-95">Integrar Cliente a Cartera</button>
-                        <div className="absolute top-0 right-0 w-64 h-64 bg-blue-600/5 rounded-full blur-[100px] -z-10"></div>
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-10">
-                        {clients.map(c => {
-                            const risk = calculateTaxRisk(c.ruc, c.taxStatus);
-                            return (
-                                <div key={c.id} className="bg-white p-10 rounded-[4rem] border border-slate-100 flex flex-col justify-between items-start group shadow-sm hover:shadow-2xl transition-all relative overflow-hidden">
-                                    <div className="w-full">
-                                        <div className="flex justify-between items-start mb-8">
-                                            <div className="w-16 h-16 bg-blue-50 rounded-[1.5rem] flex items-center justify-center text-blue-600 shadow-inner group-hover:scale-110 transition-transform"><Building2 size={32}/></div>
-                                            <div className={`px-5 py-2.5 rounded-full text-[10px] font-black uppercase tracking-widest border-2 ${risk.color === 'rose' ? 'bg-rose-50 text-rose-600 border-rose-100 animate-pulse' : (risk.color === 'emerald' ? 'bg-emerald-50 text-emerald-600 border-emerald-100':'bg-blue-50 text-blue-600 border-blue-100')}`}>{risk.text}</div>
-                                        </div>
-                                        <h3 className="font-black text-slate-800 uppercase text-lg leading-tight truncate w-full mb-1">{String(c.name)}</h3>
-                                        <p className="text-[11px] font-black text-slate-300 font-mono mt-1 uppercase tracking-widest">RUC {String(c.ruc)}</p>
-                                    </div>
-                                    <div className="w-full flex justify-between items-center mt-10 pt-8 border-t border-slate-50">
-                                        <button onClick={() => markAsDeclared(c.id)} className={`p-4 rounded-2xl transition-all ${c.taxStatus === 'declared' ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-200' : 'bg-slate-100 text-slate-400 hover:bg-blue-100 hover:text-blue-600'}`}>
-                                          <CheckCircle2 size={24}/>
-                                        </button>
-                                        <button onClick={() => deleteItem('clients', c.id)} className="text-slate-100 hover:text-rose-500 transition-colors p-4 hover:bg-rose-50 rounded-2xl"><Trash2 size={24}/></button>
-                                    </div>
-                                </div>
-                            );
-                        })}
                     </div>
                 </div>
             )}
