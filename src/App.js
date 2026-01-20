@@ -4,7 +4,8 @@ import {
   CheckCircle2, Building2, AlertTriangle, Shield, 
   Plus, Trash2, Calendar, Database, LogOut, Clock, 
   Edit, Save, BadgeCheck, Zap, Activity, ShieldCheck, 
-  Wifi, WifiOff, ChevronRight, BarChart3, Briefcase
+  Wifi, WifiOff, ChevronRight, BarChart3, Briefcase,
+  UserCog
 } from 'lucide-react';
 
 // Implementación de Firebase v11+
@@ -19,8 +20,8 @@ import {
 
 /**
  * NYSEM MONTALBAN EIRL - SISTEMA DE GESTIÓN DE PRODUCCIÓN (SGP)
- * VERSIÓN 29.0.0 - VERCEL PIXEL PERFECT & SCALING FIX
- * OBJETIVO: Sincronización visual absoluta entre Gemini y Vercel.
+ * VERSIÓN 29.0.1 - HOTFIX: USERCOG DEFINITION & BUILD FIX
+ * OBJETIVO: Resolver error de compilación en Vercel y mantener escalado profesional.
  */
 
 const getFirebaseConfig = () => {
@@ -400,6 +401,57 @@ export default function App() {
                                   </div>
                               ))}
                           </div>
+                    </div>
+                 </div>
+              )}
+
+              {viewMode === 'staff' && currentUserData?.role === 'Administrador' && (
+                 <div className="space-y-12 animate-in fade-in max-w-7xl mx-auto">
+                    <div className="bg-[#020617] p-12 rounded-[4rem] shadow-2xl relative overflow-hidden border-b-[12px] border-[#0EA5E9]">
+                        <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-10 border-b-2 border-white/5 pb-10 mb-10 relative z-10">
+                           <h2 className="text-7xl font-black text-white tracking-tighter uppercase italic leading-none">Personal</h2>
+                           <button onClick={async () => {
+                              if(!userForm.name || !userForm.username || !fbUser) return;
+                              try {
+                                if(editingId) {
+                                  await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'users', editingId), { ...userForm, updatedAt: Timestamp.now() });
+                                  notify("Staff Actualizado");
+                                } else {
+                                  await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'users'), { ...userForm, createdAt: Timestamp.now() });
+                                  notify("Auditor Registrado");
+                                }
+                                setUserForm({ name: '', username: '', password: '', role: 'Auditor' }); setEditingId(null);
+                              } catch(e) { notify("Error al guardar", "error"); }
+                           }} className={`px-12 py-5 rounded-[2.5rem] text-[20px] font-black uppercase tracking-widest text-white shadow-xl hover:scale-105 transition-all border-4 border-white/10 ${editingId ? 'bg-[#0EA5E9]' : 'bg-[#10B981]'}`}>
+                              {editingId ? "GUARDAR" : "INTEGRAR"}
+                           </button>
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 relative z-10">
+                            <input type="text" placeholder="NOMBRE" value={userForm.name} onChange={e => setUserForm({...userForm, name: e.target.value})} className="p-8 bg-white/5 rounded-[2.5rem] border-2 border-white/10 font-black text-white text-3xl uppercase outline-none focus:border-[#0EA5E9] transition-all"/>
+                            <input type="text" placeholder="ID LOGIN" value={userForm.username} onChange={e => setUserForm({...userForm, username: e.target.value})} className="p-8 bg-white/5 rounded-[2.5rem] border-2 border-white/10 font-black text-white text-3xl uppercase outline-none focus:border-[#0EA5E9] transition-all"/>
+                            <input type="password" placeholder="CLAVE" value={userForm.password} onChange={e => setUserForm({...userForm, password: e.target.value})} className="p-8 bg-white/5 rounded-[2.5rem] border-2 border-white/10 font-black text-white text-3xl uppercase outline-none focus:border-[#0EA5E9] transition-all"/>
+                            <select value={userForm.role} onChange={e => setUserForm({...userForm, role: e.target.value})} className="p-8 bg-white/5 rounded-[2.5rem] border-2 border-white/10 font-black text-white text-[16px] uppercase h-24 text-center outline-none">
+                                <option value="Auditor">AUDITOR (STAFF)</option>
+                                <option value="Administrador">ADMINISTRADOR</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-10">
+                        {users.map(u => (
+                            <div key={u.id} className="bg-white p-10 rounded-[5rem] border-2 border-slate-50 shadow-xl flex flex-col items-center group hover:shadow-2xl transition-all border-b-[25px] hover:border-[#10B981] text-center">
+                                <div className="w-32 h-32 bg-slate-50 rounded-[3rem] flex items-center justify-center text-slate-800 border-2 border-slate-100 shadow-inner group-hover:bg-[#020617] group-hover:text-white transition-all mb-6"><UserCog size={60}/></div>
+                                <h3 className="font-black text-[#020617] uppercase text-[2.5rem] leading-[1] tracking-tighter mb-4 italic">{u.name}</h3>
+                                <div className="space-y-2 mb-8">
+                                   <span className="px-6 py-2 rounded-full text-[12px] font-black uppercase tracking-widest bg-blue-50 text-blue-600 border border-blue-100">{u.role}</span>
+                                   <p className="text-slate-400 font-mono text-sm tracking-widest">ID: {u.username}</p>
+                                </div>
+                                <div className="w-full flex justify-between items-center mt-auto pt-8 border-t-2 border-slate-50">
+                                    <button onClick={() => { setEditingId(u.id); setUserForm({ name: u.name, username: u.username, password: u.password, role: u.role }); window.scrollTo({top:0, behavior:'smooth'}); }} className="p-6 rounded-[2rem] bg-slate-50 text-slate-400 hover:bg-[#0EA5E9] hover:text-white transition-all border-2 border-slate-100 shadow-lg"><Edit size={36}/></button>
+                                    <button onClick={async () => { if(window.confirm("¿Eliminar staff?")) await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'users', u.id)); }} className="text-slate-100 hover:text-rose-600 transition-colors p-6 duration-500"><Trash2 size={40}/></button>
+                                </div>
+                            </div>
+                        ))}
                     </div>
                  </div>
               )}
