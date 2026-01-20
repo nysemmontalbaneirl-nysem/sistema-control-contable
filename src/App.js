@@ -20,11 +20,8 @@ import {
 
 /**
  * NYSEM MONTALBAN EIRL - SISTEMA DE GESTIÓN DE PRODUCCIÓN (SGP)
- * VERSIÓN 20.0.0 - ROYAL EXECUTIVE AUDIT (COLOR-FIX EDITION)
- * PALETA: 
- * - Azul Maestro: #020617 (Slate 950)
- * - Celeste Premium: #0EA5E9 (Sky 500)
- * - Verde Éxito: #10B981 (Emerald 500)
+ * VERSIÓN 21.0.0 - ELITE CORPORATE PERFORMANCE
+ * ENFOQUE: Legibilidad XL, Colores Forzados y Distribución Gerencial.
  */
 
 const firebaseConfig = {
@@ -75,17 +72,17 @@ export default function App() {
   const [userForm, setUserForm] = useState({ name: '', username: '', password: '', role: 'Auditor', hourlyCost: '' });
   const [reportForm, setReportForm] = useState({ time: '', description: '', date: getTodayISO(), clientName: '' });
 
-  // --- LÓGICA DE RIESGO SUNAT (MAPEO EXPLÍCITO DE COLORES) ---
-  const calculateTaxRisk = (ruc, taxStatus) => {
-    if (!ruc) return { text: 'Sin RUC', bg: 'bg-slate-100', tx: 'text-slate-600', ring: 'ring-slate-100' }; 
-    if (taxStatus === 'declared') return { text: 'Declarado', bg: 'bg-emerald-100', tx: 'text-emerald-700', ring: 'ring-emerald-100' };
+  // --- LÓGICA DE RIESGO SUNAT (MAPEO DE ESTILOS ESTÁTICOS) ---
+  const getRiskStyle = (ruc, taxStatus) => {
+    if (!ruc) return { text: 'SIN RUC', bg: 'bg-gray-100', tx: 'text-gray-600', ring: 'ring-gray-200' }; 
+    if (taxStatus === 'declared') return { text: 'DECLARADO', bg: 'bg-[#10B981]/10', tx: 'text-[#10B981]', ring: 'ring-[#10B981]/30' };
     const rucStr = String(ruc).trim();
     const lastDigit = parseInt(rucStr.charAt(rucStr.length - 1));
-    if (isNaN(lastDigit)) return { text: 'Inválido', bg: 'bg-slate-100', tx: 'text-slate-600', ring: 'ring-slate-100' };
+    if (isNaN(lastDigit)) return { text: 'INVÁLIDO', bg: 'bg-gray-100', tx: 'text-gray-600', ring: 'ring-gray-200' };
     
-    if ([0, 1, 2].includes(lastDigit)) return { text: 'VENCE HOY', bg: 'bg-rose-100', tx: 'text-rose-700', ring: 'ring-rose-200' }; 
-    if ([3, 4, 5, 6].includes(lastDigit)) return { text: 'PRÓXIMO', bg: 'bg-amber-100', tx: 'text-amber-700', ring: 'ring-amber-200' }; 
-    return { text: 'EN PLAZO', bg: 'bg-sky-100', tx: 'text-sky-700', ring: 'ring-sky-200' }; 
+    if ([0, 1, 2].includes(lastDigit)) return { text: 'VENCE HOY', bg: 'bg-rose-100', tx: 'text-rose-700', ring: 'ring-rose-300' }; 
+    if ([3, 4, 5, 6].includes(lastDigit)) return { text: 'PRÓXIMO', bg: 'bg-amber-100', tx: 'text-amber-700', ring: 'ring-amber-300' }; 
+    return { text: 'EN PLAZO', bg: 'bg-[#0EA5E9]/10', tx: 'text-[#0EA5E9]', ring: 'ring-[#0EA5E9]/30' }; 
   };
 
   useEffect(() => {
@@ -97,7 +94,7 @@ export default function App() {
       try {
         await signInAnonymously(auth);
       } catch (err) {
-        setAccessError(`Cloud Sync Error: ${err.message}`);
+        setAccessError(`Error de Sincronización: ${err.message}`);
       } finally {
         setIsInitializing(false);
       }
@@ -112,7 +109,8 @@ export default function App() {
     
     const usersRef = collection(db, 'artifacts', appId, 'public', 'data', 'users');
     const unsubUsers = onSnapshot(usersRef, (snap) => {
-      setUsers(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      const data = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      setUsers(data);
     });
 
     let unsubClients, unsubReports;
@@ -174,11 +172,7 @@ export default function App() {
   const handleEditClient = (client) => {
     setEditingClientId(client.id);
     setClientForm({ name: client.name, ruc: client.ruc, sector: client.sector || 'Servicios', honorario: client.honorario || '' });
-  };
-
-  const cancelClientEdit = () => {
-    setEditingClientId(null);
-    setClientForm({ name: '', ruc: '', sector: 'Servicios', honorario: '' });
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const markAsDeclared = async (clientId) => {
@@ -207,30 +201,23 @@ export default function App() {
   const handleEditUser = (user) => {
     setEditingUserId(user.id);
     setUserForm({ name: user.name, username: user.username, password: user.password, role: user.role || 'Auditor', hourlyCost: user.hourlyCost || '' });
-  };
-
-  const cancelUserEdit = () => {
-    setEditingUserId(null);
-    setUserForm({ name: '', username: '', password: '', role: 'Auditor', hourlyCost: '' });
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const deleteDocGeneric = async (col, id) => {
-    if (window.confirm("¿Confirmar eliminación definitiva del registro corporativo?")) {
+    if (window.confirm("¿Confirmar eliminación definitiva del registro?")) {
       await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', col, id));
     }
   };
 
   if (isInitializing) {
     return (
-      <div className="h-screen flex items-center justify-center bg-[#020617] text-white">
+      <div className="h-screen flex items-center justify-center bg-[#020617] text-white font-sans">
         <div className="flex flex-col items-center gap-10">
-          <div className="relative flex items-center justify-center">
-            <div className="w-24 h-24 border-4 border-sky-500/20 rounded-full animate-ping"></div>
-            <RefreshCw className="text-sky-400 animate-spin absolute" size={56} />
-          </div>
+          <RefreshCw className="text-[#0EA5E9] animate-spin" size={70} />
           <div className="text-center">
-             <p className="text-[12px] font-black tracking-[1.2em] uppercase text-sky-400">NYSEM MONTALBÁN EIRL</p>
-             <p className="text-[14px] text-slate-500 uppercase tracking-widest mt-6 font-mono animate-pulse">Iniciando Consola de Alta Fidelidad v20.0</p>
+             <p className="text-[14px] font-black tracking-[1em] uppercase text-[#0EA5E9]">NYSEM MONTALBÁN EIRL</p>
+             <p className="text-[16px] text-slate-500 uppercase tracking-widest mt-6 font-mono animate-pulse">Cargando Entorno Ejecutivo v21.0</p>
           </div>
         </div>
       </div>
@@ -239,34 +226,27 @@ export default function App() {
 
   if (!isLoggedIn) {
     return (
-      <div className="h-screen flex items-center justify-center bg-[#F1F5F9] p-6 relative overflow-hidden">
-        <div className="absolute top-0 left-0 w-full h-full bg-[#020617] opacity-[0.03] pointer-events-none"></div>
-        <div className="bg-white w-full max-w-2xl rounded-[5rem] shadow-[0_80px_150px_-30px_rgba(0,0,0,0.2)] overflow-hidden border border-white flex flex-col z-10">
-          <div className="bg-[#020617] p-24 text-center text-white relative border-b-4 border-emerald-500">
-            <div className="absolute top-0 right-0 w-96 h-96 bg-sky-500/10 rounded-full blur-[120px] -mr-48 -mt-48"></div>
-            <Shield className="mx-auto mb-10 text-sky-400 drop-shadow-[0_0_30px_rgba(14,165,233,0.6)]" size={96}/>
-            <h1 className="text-6xl font-black uppercase tracking-tighter leading-none mb-6">Master Node</h1>
-            <p className="text-[12px] font-black text-slate-500 uppercase tracking-[0.6em] italic">Asesoría & Capacitación Empresarial</p>
+      <div className="min-h-screen flex items-center justify-center bg-[#F1F5F9] p-8 font-sans">
+        <div className="bg-white w-full max-w-2xl rounded-[4rem] shadow-[0_60px_100px_-20px_rgba(2,6,23,0.15)] overflow-hidden border border-white flex flex-col">
+          <div className="bg-[#020617] p-24 text-center text-white relative">
+            <div className="absolute top-0 right-0 w-96 h-96 bg-[#0EA5E9]/10 rounded-full blur-[120px] -mr-48 -mt-48"></div>
+            <Shield className="mx-auto mb-12 text-[#0EA5E9] drop-shadow-[0_0_20px_rgba(14,165,233,0.5)]" size={100}/>
+            <h1 className="text-6xl font-black uppercase tracking-tighter leading-none mb-6">SGP ACCESS</h1>
+            <p className="text-[13px] font-black text-slate-500 uppercase tracking-[0.6em] italic">Asesoría & Capacitación Empresarial</p>
           </div>
-          <div className="p-24 space-y-14 bg-white">
+          <div className="p-24 space-y-12 bg-white">
             <form onSubmit={handleLogin} className="space-y-10">
               {accessError && (
-                <div className="p-8 bg-rose-50 border border-rose-200 rounded-[2.5rem] flex items-center gap-6 animate-in fade-in zoom-in duration-500">
-                  <AlertCircle className="text-rose-600 shrink-0" size={28}/>
-                  <p className="text-[14px] font-black text-rose-800 uppercase tracking-tight">{accessError}</p>
+                <div className="p-8 bg-rose-50 border border-rose-100 rounded-[2.5rem] flex items-center gap-6 animate-in fade-in zoom-in">
+                  <AlertCircle className="text-rose-600 shrink-0" size={32}/>
+                  <p className="text-[15px] font-black text-rose-800 uppercase tracking-tight">{accessError}</p>
                 </div>
               )}
               <div className="space-y-8">
-                <div className="relative group">
-                  <Lock className="absolute left-8 top-1/2 -translate-y-1/2 text-slate-300 group-focus-within:text-sky-500 transition-colors" size={24}/>
-                  <input type="text" placeholder="ID DE ACCESO" value={loginForm.username} onChange={e => setLoginForm({...loginForm, username: e.target.value})} className="w-full p-9 pl-20 bg-slate-50 rounded-[2.8rem] border-2 border-transparent font-black text-slate-800 shadow-inner outline-none focus:ring-[12px] ring-sky-500/10 focus:bg-white focus:border-sky-500/20 transition-all uppercase tracking-[0.2em]" required />
-                </div>
-                <div className="relative group">
-                  <Database className="absolute left-8 top-1/2 -translate-y-1/2 text-slate-300 group-focus-within:text-sky-500 transition-colors" size={24}/>
-                  <input type="password" placeholder="CLAVE CRIPTOGRÁFICA" value={loginForm.password} onChange={e => setLoginForm({...loginForm, password: e.target.value})} className="w-full p-9 pl-20 bg-slate-50 rounded-[2.8rem] border-2 border-transparent font-black text-slate-800 shadow-inner outline-none focus:ring-[12px] ring-sky-500/10 focus:bg-white focus:border-sky-500/20 transition-all uppercase tracking-[0.2em]" required />
-                </div>
+                <input type="text" placeholder="ID DE USUARIO" value={loginForm.username} onChange={e => setLoginForm({...loginForm, username: e.target.value})} className="w-full p-9 bg-slate-50 rounded-[3rem] border-2 border-slate-100 font-black text-slate-800 shadow-inner outline-none focus:bg-white focus:border-[#0EA5E9]/30 transition-all text-xl uppercase tracking-widest placeholder:text-slate-300" required />
+                <input type="password" placeholder="FIRMA DIGITAL" value={loginForm.password} onChange={e => setLoginForm({...loginForm, password: e.target.value})} className="w-full p-9 bg-slate-50 rounded-[3rem] border-2 border-slate-100 font-black text-slate-800 shadow-inner outline-none focus:bg-white focus:border-[#0EA5E9]/30 transition-all text-xl uppercase tracking-widest placeholder:text-slate-300" required />
               </div>
-              <button type="submit" className="w-full bg-[#020617] text-white py-9 rounded-[4rem] font-black text-[15px] uppercase tracking-[0.6em] hover:bg-sky-600 transition-all shadow-2xl active:scale-95 mt-10 hover:shadow-sky-500/30">Validar Firma Digital</button>
+              <button type="submit" className="w-full bg-[#020617] text-white py-10 rounded-[4rem] font-black text-[16px] uppercase tracking-[0.6em] hover:bg-[#0EA5E9] transition-all shadow-3xl active:scale-95 mt-10 hover:shadow-[#0EA5E9]/30">Validar Acceso</button>
             </form>
           </div>
         </div>
@@ -277,48 +257,46 @@ export default function App() {
   const isAdmin = currentUserData?.role === 'Administrador';
 
   return (
-    <div className="flex h-screen bg-[#F8FAFC] font-sans overflow-hidden animate-in fade-in duration-1000">
+    <div className="flex min-h-screen bg-[#F8FAFC] font-sans overflow-hidden">
        
-       {/* SIDEBAR: ROYAL DARK (AZUL OSCURO + CELESTE) */}
-       <aside className={`${sidebarOpen ? 'w-96' : 'w-32'} bg-[#020617] flex flex-col transition-all duration-700 shadow-[20px_0_60px_rgba(0,0,0,0.2)] z-50 relative overflow-hidden border-r border-white/5`}>
-         <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-b from-sky-500/[0.05] to-transparent pointer-events-none"></div>
-         
+       {/* SIDEBAR: ESTRUCTURA EJECUTIVA */}
+       <aside className={`${sidebarOpen ? 'w-96' : 'w-32'} bg-[#020617] flex flex-col transition-all duration-700 shadow-[25px_0_60px_rgba(0,0,0,0.2)] z-50 relative border-r border-white/5`}>
          <div className="h-40 flex items-center px-14 border-b border-white/5">
-            <div className="bg-[#10B981] p-6 rounded-[2rem] shadow-[0_0_35px_rgba(16,185,129,0.5)] transition-transform hover:scale-110 duration-500 border border-white/20">
-              <Cpu className="text-white" size={38}/>
+            <div className="bg-[#10B981] p-6 rounded-[2rem] shadow-[0_0_30px_rgba(16,185,129,0.4)] transition-transform hover:rotate-12">
+              <Database className="text-white" size={42}/>
             </div>
             {sidebarOpen && (
-              <div className="ml-8 animate-in fade-in slide-in-from-left-12">
-                <span className="block font-black text-4xl text-white tracking-tighter uppercase leading-none italic">NYSEM</span>
-                <span className="text-[11px] font-black text-sky-400 uppercase tracking-[0.6em] mt-4 block opacity-90 leading-none">AUDIT NODE v20</span>
+              <div className="ml-8 animate-in fade-in slide-in-from-left-10">
+                <span className="block font-black text-4xl text-white tracking-tighter uppercase italic leading-none">NYSEM</span>
+                <span className="text-[11px] font-black text-[#0EA5E9] uppercase tracking-[0.7em] mt-3 block opacity-90 leading-none">CONTROL v21</span>
               </div>
             )}
          </div>
 
-         <nav className="flex-1 p-12 space-y-5 overflow-y-auto custom-scrollbar">
+         <nav className="flex-1 p-12 space-y-6 overflow-y-auto">
             {[
               { id: 'dashboard', label: 'Dashboard Real', icon: Home, show: true },
               { id: 'clients', label: 'Cartera Clientes', icon: Building2, show: true },
               { id: 'reports', label: 'Bitácora Staff', icon: Timer, show: true },
-              { id: 'users', label: 'Gestión de Staff', icon: UserCog, show: isAdmin }
+              { id: 'users', label: 'Gestión Staff', icon: UserCog, show: isAdmin }
             ].filter(i => i.show).map((item) => (
-              <button key={item.id} onClick={() => setViewMode(item.id)} className={`w-full flex items-center gap-7 p-7 rounded-[2.5rem] text-[13px] font-black uppercase tracking-[0.3em] transition-all duration-500 group relative ${viewMode === item.id ? 'bg-sky-600 text-white shadow-[0_25px_50px_-10px_rgba(14,165,233,0.6)] translate-x-4 border-l-8 border-emerald-400' : 'text-slate-500 hover:bg-white/5 hover:text-sky-400'}`}>
-                <item.icon size={28} className={viewMode === item.id ? 'animate-pulse' : 'group-hover:rotate-12 transition-transform'}/> 
+              <button key={item.id} onClick={() => setViewMode(item.id)} className={`w-full flex items-center gap-8 p-7 rounded-[2.5rem] text-[14px] font-black uppercase tracking-[0.3em] transition-all duration-500 group relative ${viewMode === item.id ? 'bg-[#0EA5E9] text-white shadow-[0_30px_60px_-15px_rgba(14,165,233,0.5)] translate-x-4' : 'text-slate-500 hover:bg-white/5 hover:text-white'}`}>
+                <item.icon size={30} className={viewMode === item.id ? 'animate-pulse' : 'group-hover:scale-125 transition-transform'}/> 
                 {sidebarOpen && item.label}
               </button>
             ))}
          </nav>
 
          <div className="p-12">
-            <div className="bg-white/5 p-8 rounded-[3.5rem] border border-white/10 flex items-center gap-7 backdrop-blur-3xl group hover:bg-white/10 transition-all duration-500 cursor-pointer">
-                <div className="w-18 h-18 rounded-[1.5rem] bg-[#10B981] flex items-center justify-center text-white font-black text-3xl shadow-2xl transition-transform group-hover:rotate-6 border border-white/20">
+            <div className="bg-white/5 p-8 rounded-[3.5rem] border border-white/10 flex items-center gap-8 backdrop-blur-3xl group hover:bg-white/10 transition-all duration-500">
+                <div className="w-20 h-20 rounded-[1.8rem] bg-[#10B981] flex items-center justify-center text-white font-black text-4xl shadow-2xl border border-white/10 group-hover:rotate-6 transition-transform">
                   {currentUserData?.name?.charAt(0)}
                 </div>
                 {sidebarOpen && (
                   <div className="flex-1 overflow-hidden">
-                    <p className="text-[13px] font-black text-white truncate uppercase tracking-tight leading-none mb-3">{currentUserData?.name}</p>
+                    <p className="text-[14px] font-black text-white truncate uppercase tracking-tight leading-none mb-3">{currentUserData?.name}</p>
                     <button onClick={handleLogout} className="text-[11px] font-black text-rose-500 uppercase tracking-[0.4em] hover:text-white transition-colors flex items-center gap-3">
-                       <LogOut size={14}/> Desconectar
+                       <LogOut size={16}/> Cerrar Sesión
                     </button>
                   </div>
                 )}
@@ -328,171 +306,107 @@ export default function App() {
 
        <main className="flex-1 flex flex-col overflow-hidden relative">
           
-          {/* HEADER: EXECUTIVE GLASS (CON BUSCADOR REAL) */}
-          <header className="h-36 bg-white/80 backdrop-blur-3xl border-b border-slate-200 flex items-center px-20 justify-between z-40">
+          {/* HEADER: REFINADO Y VISIBLE */}
+          <header className="h-36 bg-white border-b-4 border-[#0EA5E9]/10 flex items-center px-20 justify-between z-40">
             <div className="flex items-center gap-12">
-                <button onClick={() => setSidebarOpen(!sidebarOpen)} className="p-6 bg-white hover:bg-sky-50 rounded-[2rem] text-slate-400 hover:text-sky-600 border-2 border-slate-100 shadow-xl transition-all group active:scale-90">
-                  <Menu size={32} className="group-hover:scale-110 transition-transform"/>
+                <button onClick={() => setSidebarOpen(!sidebarOpen)} className="p-6 bg-slate-50 hover:bg-[#0EA5E9]/5 rounded-[2rem] text-slate-400 hover:text-[#0EA5E9] border-2 border-slate-100 shadow-sm transition-all">
+                  <Menu size={36}/>
                 </button>
-                <div className="hidden lg:flex items-center gap-8 bg-slate-50 px-10 py-6 rounded-[2.8rem] border-2 border-slate-100 group focus-within:ring-8 ring-sky-500/10 transition-all shadow-inner">
-                  <Search size={24} className="text-slate-300 group-focus-within:text-sky-500 transition-colors"/>
-                  <input type="text" placeholder="LOCALIZAR CLIENTE O RUC..." className="bg-transparent border-none outline-none text-[14px] font-black text-slate-600 w-96 placeholder:text-slate-300 uppercase tracking-[0.2em]"/>
+                <div className="hidden lg:flex items-center gap-6 bg-[#020617] px-12 py-6 rounded-[2.5rem] text-white shadow-xl">
+                    <Monitor size={24} className="text-[#0EA5E9] animate-pulse"/>
+                    <div className="flex flex-col">
+                        <span className="text-[15px] font-black tracking-tighter uppercase leading-none">Terminal Maestro</span>
+                        <span className="text-[9px] font-black text-slate-500 uppercase tracking-[0.5em] mt-1">Conexión Cifrada Activa</span>
+                    </div>
                 </div>
             </div>
             
             <div className="flex items-center gap-12">
                <div className="flex flex-col items-end mr-8 hidden xl:flex">
-                  <span className="text-[11px] font-black text-slate-400 uppercase tracking-[0.6em] mb-3 leading-none italic">SISTEMA CIFRADO</span>
-                  <span className="text-[13px] font-black text-emerald-500 uppercase flex items-center gap-4">
-                    <Monitor size={18} fill="currentColor" className="animate-pulse"/> CONEXIÓN ACTIVA
+                  <span className="text-[11px] font-black text-slate-400 uppercase tracking-[0.5em] mb-2 leading-none">Auditoría en Tiempo Real</span>
+                  <span className="text-[14px] font-black text-[#10B981] uppercase flex items-center gap-4">
+                    <Zap size={18} fill="currentColor"/> NODO SINCRONIZADO
                   </span>
                </div>
-               <div className="h-20 w-[2px] bg-slate-100"></div>
-               <div className="flex items-center gap-8 bg-white px-12 py-6 rounded-[2.2rem] border-2 border-slate-100 font-mono text-[16px] font-black text-slate-800 shadow-[0_15px_40px_-10px_rgba(0,0,0,0.08)]">
-                  <Calendar size={24} className="text-sky-600"/> {String(getTodayISO())}
+               <div className="h-20 w-[3px] bg-slate-100"></div>
+               <div className="flex items-center gap-8 bg-slate-50 px-14 py-6 rounded-[2.2rem] border-2 border-slate-100 font-mono text-[20px] font-black text-slate-800 shadow-inner group">
+                  <Calendar size={28} className="text-[#0EA5E9] group-hover:rotate-12 transition-transform"/> {getTodayISO()}
                </div>
             </div>
           </header>
 
-          <div className="flex-1 overflow-y-auto p-16 lg:p-24 custom-scrollbar bg-[#F8FAFC] space-y-24">
+          <div className="flex-1 overflow-y-auto p-16 lg:p-24 custom-scrollbar bg-[#F8FAFC]">
             
-            {/* DASHBOARD: EXECUTIVE VIEW */}
+            {/* DASHBOARD: DISTRIBUCIÓN GERENCIAL */}
             {viewMode === 'dashboard' && (
-                <div className="space-y-24 animate-in fade-in slide-in-from-bottom-20 duration-1000">
-                    <div className="flex flex-col lg:flex-row justify-between items-start lg:items-end gap-16">
+                <div className="space-y-24 animate-in fade-in duration-1000">
+                    <div className="flex flex-col lg:flex-row justify-between items-start lg:items-end gap-16 border-l-[12px] border-[#0EA5E9] pl-16">
                         <div className="space-y-6">
-                           <h2 className="text-8xl font-black text-slate-900 tracking-tighter leading-[0.9] uppercase italic">Inteligencia <br/>Contable</h2>
-                           <p className="text-xl font-bold text-slate-400 tracking-tight flex items-center gap-6">
-                             <div className="w-20 h-2 bg-emerald-500 rounded-full shadow-[0_0_15px_rgba(16,185,129,0.5)]"></div> Consola de Gestión Estratégica
+                           <h2 className="text-9xl font-black text-[#020617] tracking-tighter leading-[0.8] uppercase italic">Control <br/>Ejecutivo</h2>
+                           <p className="text-2xl font-bold text-slate-400 tracking-tight flex items-center gap-8">
+                             <div className="w-24 h-2.5 bg-[#10B981] rounded-full shadow-[0_0_20px_rgba(16,185,129,0.5)]"></div> Gestión de Producción & Auditoría
                            </p>
                         </div>
                     </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-14">
+                    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-16">
                         {[
-                          { title: "CARTERA CLIENTES", val: clients.length, icon: Building2, color: "sky", label: "ENTIDADES" },
-                          { title: "ALERTAS CRÍTICAS", val: clients.filter(c => calculateTaxRisk(c.ruc, c.taxStatus).text === 'VENCE HOY').length, icon: AlertTriangle, color: "rose", label: "VENCIMIENTOS" },
-                          { title: "AUDITORES STAFF", val: users.length, icon: Users, color: "emerald", label: "ASISTENTES" },
-                          { title: "BITÁCORA HOY", val: reports.filter(r => r.date === getTodayISO()).length, icon: Activity, color: "indigo", label: "AVANCES" }
+                          { title: "CARTERA CLIENTES", val: clients.length, icon: Building2, color: "#0EA5E9", label: "ENTIDADES" },
+                          { title: "ALERTAS SUNAT", val: clients.filter(c => getRiskStyle(c.ruc, c.taxStatus).text === 'VENCE HOY').length, icon: AlertTriangle, color: "#F43F5E", label: "HOY" },
+                          { title: "EQUIPO AUDITOR", val: users.length, icon: Users, color: "#10B981", label: "STAFF" },
+                          { title: "REPORTES HOY", val: reports.filter(r => r.date === getTodayISO()).length, icon: Activity, color: "#6366F1", label: "ACCIONES" }
                         ].map((stat, i) => (
-                          <div key={i} className="bg-white p-16 rounded-[5rem] border-2 border-slate-50 shadow-[0_50px_100px_-20px_rgba(0,0,0,0.06)] hover:shadow-[0_80px_150px_-30px_rgba(14,165,233,0.15)] transition-all group relative overflow-hidden border-b-8 border-sky-500">
-                              <div className={`w-28 h-28 rounded-[2.5rem] flex items-center justify-center mb-14 group-hover:scale-110 transition-transform duration-700 shadow-xl bg-slate-50 text-slate-800`}>
-                                <stat.icon size={52} className={stat.color === 'sky' ? 'text-sky-600' : (stat.color === 'rose' ? 'text-rose-600' : (stat.color === 'emerald' ? 'text-emerald-600' : 'text-indigo-600'))}/>
+                          <div key={i} className="bg-white p-16 rounded-[6rem] border-b-[15px] shadow-[0_50px_100px_-20px_rgba(0,0,0,0.08)] hover:shadow-[0_80px_150px_-30px_rgba(14,165,233,0.15)] transition-all group relative overflow-hidden" style={{ borderBottomColor: stat.color }}>
+                              <div className="w-28 h-28 rounded-[2.8rem] bg-slate-50 flex items-center justify-center mb-14 group-hover:scale-110 transition-transform duration-700 shadow-xl border border-slate-100">
+                                <stat.icon size={56} style={{ color: stat.color }}/>
                               </div>
-                              <h3 className="text-slate-400 text-[13px] font-black uppercase tracking-[0.5em] mb-4">{stat.title}</h3>
-                              <div className="text-8xl font-black text-slate-900 tracking-tighter leading-none mb-8">{stat.val}</div>
-                              <p className="text-[12px] font-black text-slate-300 uppercase tracking-widest leading-none border-t border-slate-50 pt-8">{stat.label} EN NODO</p>
-                              <div className="absolute -right-16 -bottom-16 opacity-[0.05] text-slate-900"><stat.icon size={280}/></div>
+                              <h3 className="text-slate-400 text-[14px] font-black uppercase tracking-[0.5em] mb-4">{stat.title}</h3>
+                              <div className="text-8xl font-black text-[#020617] tracking-tighter leading-none mb-10">{stat.val}</div>
+                              <p className="text-[13px] font-black text-slate-300 uppercase tracking-widest leading-none pt-8 border-t border-slate-50">{stat.label} REGISTRADOS</p>
+                              <div className="absolute -right-20 -bottom-20 opacity-[0.03] text-[#020617]"><stat.icon size={320}/></div>
                           </div>
                         ))}
                     </div>
                 </div>
             )}
 
-            {/* GESTIÓN DE STAFF: CRUD FIX */}
-            {viewMode === 'users' && isAdmin && (
-                <div className="max-w-7xl mx-auto space-y-24 animate-in fade-in zoom-in-95 duration-700 pb-32">
-                    <div className="bg-[#020617] p-20 rounded-[6rem] shadow-[0_60px_120px_-20px_rgba(0,0,0,0.3)] relative overflow-hidden border-b-8 border-emerald-500">
-                        <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-emerald-500/10 rounded-full blur-[120px] -mr-64 -mt-64"></div>
-                        
-                        <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-14 border-b border-white/5 pb-20 mb-20 relative z-10">
-                           <div className="space-y-6">
-                              <h2 className="text-7xl font-black text-white tracking-tighter uppercase leading-none">Gestión Staff</h2>
-                              <p className="text-sm font-bold text-sky-400 uppercase tracking-[0.5em] flex items-center gap-8 italic">
-                                 <div className="w-16 h-1 bg-[#10B981]"></div> Control de Auditores y Asistentes Nysem
-                              </p>
-                           </div>
-                           <div className="flex items-center gap-8">
-                              {editingUserId && (
-                                <button onClick={cancelUserEdit} className="bg-white/5 text-slate-400 px-12 py-7 rounded-[3rem] text-[12px] font-black uppercase tracking-widest hover:bg-rose-500 hover:text-white transition-all flex items-center gap-5 border border-white/10">
-                                   <X size={24}/> Cancelar
-                                </button>
-                              )}
-                              <button onClick={handleSaveUser} className={`px-20 py-8 rounded-[4rem] text-[14px] font-black uppercase tracking-[0.5em] text-white shadow-3xl hover:scale-[1.03] transition-all flex items-center gap-7 border-2 border-white/20 ${editingUserId ? 'bg-sky-600 shadow-sky-400' : 'bg-[#10B981] shadow-emerald-400'}`}>
-                                 {editingUserId ? <><Save size={28}/> Guardar Cambios</> : <><UserPlus size={28}/> Integrar Auditor</>}
-                              </button>
-                           </div>
-                        </div>
-                        
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-14 relative z-10">
-                            {[
-                                { label: "NOMBRE COMPLETO", key: "name", type: "text", ph: "EJ: CPC JUAN PÉREZ" },
-                                { label: "USUARIO ACCESO", key: "username", type: "text", ph: "AUDITOR_2026" },
-                                { label: "CONTRASEÑA", key: "password", type: "text", ph: "**********" }
-                            ].map((input) => (
-                                <div key={input.key} className="space-y-5">
-                                    <label className="text-[12px] font-black text-slate-500 ml-10 uppercase tracking-widest leading-none">{input.label}</label>
-                                    <input type={input.type} placeholder={input.ph} value={userForm[input.key]} onChange={e => setUserForm({...userForm, [input.key]: e.target.value})} className="w-full p-9 bg-white/5 rounded-[3rem] border-2 border-white/10 font-black text-white shadow-inner outline-none focus:bg-white/10 focus:border-sky-500 transition-all uppercase tracking-widest"/>
-                                </div>
-                            ))}
-                            <div className="space-y-5">
-                                <label className="text-[12px] font-black text-slate-500 ml-10 uppercase tracking-widest leading-none">RANGO NODO</label>
-                                <select value={userForm.role} onChange={e => setUserForm({...userForm, role: e.target.value})} className="w-full p-9 bg-white/5 rounded-[3rem] border-2 border-white/10 font-black text-white shadow-inner outline-none appearance-none cursor-pointer text-center text-[13px] uppercase tracking-[0.3em]">
-                                    <option value="Auditor">AUDITOR (STAFF)</option>
-                                    <option value="Administrador">ADMINISTRADOR (CPC)</option>
-                                </select>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-20">
-                        {users.map((u) => (
-                            <div key={u.id} className="bg-white p-20 rounded-[6rem] border-2 border-slate-50 flex flex-col justify-between items-start group shadow-[0_40px_80px_-20px_rgba(0,0,0,0.05)] hover:shadow-[0_80px_150px_-30px_rgba(0,0,0,0.1)] transition-all duration-700 animate-in slide-in-from-bottom-16">
-                                <div className="w-full">
-                                    <div className="flex justify-between items-start mb-16">
-                                        <div className="w-28 h-28 bg-slate-50 rounded-[2.5rem] flex items-center justify-center text-slate-800 shadow-inner group-hover:bg-[#10B981] group-hover:text-white transition-all duration-700 shadow-sm border border-slate-100"><UserCog size={48}/></div>
-                                        <div className={`px-8 py-4 rounded-full text-[12px] font-black uppercase tracking-[0.4em] border-2 transition-all duration-500 ${u.role === 'Administrador' ? 'bg-indigo-50 text-indigo-700 border-indigo-100' : 'bg-sky-50 text-sky-700 border-sky-100'}`}>{u.role}</div>
-                                    </div>
-                                    <h3 className="font-black text-slate-900 uppercase text-4xl leading-[1.1] mb-5 tracking-tighter group-hover:text-sky-600 transition-colors duration-500">{u.name}</h3>
-                                    <p className="text-[16px] font-black text-slate-300 font-mono tracking-[0.5em] uppercase opacity-80 bg-slate-50 p-4 rounded-2xl w-fit">ID: {u.username}</p>
-                                </div>
-                                <div className="w-full flex justify-between items-center mt-20 pt-14 border-t-2 border-slate-50">
-                                    <button onClick={() => handleEditUser(u)} className="p-8 rounded-[2.2rem] bg-sky-50 text-sky-600 hover:bg-sky-600 hover:text-white transition-all shadow-xl shadow-sky-100/50 group/edit border-2 border-sky-100"><Edit size={32} className="group-hover/edit:rotate-12 transition-transform"/></button>
-                                    <button onClick={() => deleteDocGeneric('users', u.id)} className="text-slate-100 hover:text-rose-600 transition-colors p-8 hover:bg-rose-50 rounded-[2.2rem] duration-500"><Trash2 size={36}/></button>
-                                </div>
-                            </div>
-                        ))}
-                    </div>
-                </div>
-            )}
-
-            {/* CARTERA CLIENTES: EXECUTIVE CRUD */}
+            {/* CARTERA CLIENTES: DISTRIBUCIÓN XL */}
             {viewMode === 'clients' && (
                 <div className="max-w-7xl mx-auto space-y-24 animate-in fade-in zoom-in-95 duration-700 pb-32">
-                    <div className="bg-white p-20 rounded-[6rem] border-2 border-slate-100 shadow-[0_60px_120px_-30px_rgba(0,0,0,0.1)] relative overflow-hidden group border-b-[12px] border-sky-500">
-                        <div className="absolute top-0 right-0 w-[600px] h-[600px] bg-sky-500/5 rounded-full blur-[150px] -mr-64 -mt-64"></div>
+                    <div className="bg-[#020617] p-20 rounded-[6rem] shadow-[0_60px_120px_-20px_rgba(0,0,0,0.4)] relative overflow-hidden group">
+                        <div className="absolute top-0 right-0 w-[600px] h-[600px] bg-[#0EA5E9]/10 rounded-full blur-[150px] -mr-72 -mt-72 transition-all group-hover:bg-[#0EA5E9]/20 duration-1000"></div>
                         
-                        <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-14 border-b-2 border-slate-50 pb-20 mb-20 relative z-10">
+                        <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-16 border-b border-white/5 pb-20 mb-20 relative z-10">
                            <div className="space-y-6">
-                              <h2 className="text-7xl font-black text-[#020617] tracking-tighter uppercase leading-none italic">Cartera Corporativa</h2>
-                              <p className="text-sm font-bold text-slate-400 uppercase tracking-[0.5em] flex items-center gap-8 italic">
-                                 <div className="w-16 h-2 bg-sky-500"></div> Gestión Integral de Entidades en Asesoría
+                              <h2 className="text-7xl font-black text-white tracking-tighter uppercase leading-none italic">Apertura Entidad</h2>
+                              <p className="text-[14px] font-bold text-[#0EA5E9] uppercase tracking-[0.6em] flex items-center gap-10 italic leading-none">
+                                 <div className="w-20 h-1.5 bg-[#10B981]"></div> Gestión Corporativa de Cartera
                               </p>
                            </div>
                            <div className="flex items-center gap-8">
                               {editingClientId && (
-                                <button onClick={cancelClientEdit} className="bg-slate-50 text-slate-500 px-12 py-7 rounded-[3rem] text-[13px] font-black uppercase tracking-widest hover:bg-rose-600 hover:text-white transition-all flex items-center gap-5 border-2 border-slate-100">
-                                   <X size={24}/> Cancelar
+                                <button onClick={() => { setEditingClientId(null); setClientForm({ name: '', ruc: '', sector: 'Servicios', honorario: '' }); }} className="bg-white/5 text-slate-400 px-14 py-8 rounded-[3rem] text-[13px] font-black uppercase tracking-widest hover:bg-rose-600 hover:text-white transition-all border border-white/10 flex items-center gap-5 active:scale-95">
+                                   <X size={24}/> CANCELAR
                                 </button>
                               )}
-                              <button onClick={handleSaveClient} className={`px-20 py-8 rounded-[4rem] text-[15px] font-black uppercase tracking-[0.5em] text-white shadow-3xl hover:scale-[1.03] transition-all flex items-center gap-8 border-2 border-white/20 ${editingClientId ? 'bg-sky-600 shadow-sky-300' : 'bg-[#10B981] shadow-emerald-300'}`}>
-                                 {editingClientId ? <><Save size={32}/> Actualizar Ficha</> : <><Plus size={32}/> Vincular Entidad</>}
+                              <button onClick={handleSaveClient} className={`px-24 py-9 rounded-[4rem] text-[16px] font-black uppercase tracking-[0.5em] text-white shadow-3xl hover:scale-[1.05] transition-all flex items-center gap-8 border-2 border-white/20 active:scale-95 ${editingClientId ? 'bg-[#0EA5E9] shadow-[#0EA5E9]/40' : 'bg-[#10B981] shadow-[#10B981]/40'}`}>
+                                 {editingClientId ? <><Save size={32}/> ACTUALIZAR</> : <><Plus size={32}/> VINCULAR</>}
                               </button>
                            </div>
                         </div>
                         
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-14 relative z-10">
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-16 relative z-10">
                             <div className="space-y-6 lg:col-span-2">
-                                <label className="text-[13px] font-black text-slate-400 ml-12 uppercase tracking-widest leading-none">Razón Social o Denominación</label>
-                                <input type="text" placeholder="EJ: CONSORCIO AGRÍCOLA MONTALBÁN S.A.C." value={clientForm.name} onChange={e => setClientForm({...clientForm, name: e.target.value})} className="w-full p-10 bg-slate-50 rounded-[3.5rem] border-2 border-transparent font-black text-slate-900 shadow-inner outline-none focus:bg-white focus:ring-[15px] ring-sky-500/5 transition-all uppercase tracking-tight text-xl"/>
+                                <label className="text-[13px] font-black text-slate-500 ml-12 uppercase tracking-widest">Razón Social o Denominación</label>
+                                <input type="text" placeholder="CONSORCIO AGRÍCOLA MONTALBÁN S.A.C." value={clientForm.name} onChange={e => setClientForm({...clientForm, name: e.target.value})} className="w-full p-10 bg-white/5 rounded-[3.5rem] border-2 border-white/10 font-black text-white shadow-inner outline-none focus:bg-white/10 focus:border-[#0EA5E9] transition-all uppercase tracking-tight text-3xl placeholder:text-slate-700"/>
                             </div>
                             <div className="space-y-6">
-                                <label className="text-[13px] font-black text-slate-400 ml-12 uppercase tracking-widest leading-none">Registro RUC (11 Dig)</label>
-                                <input type="text" placeholder="20XXXXXXXXX" value={clientForm.ruc} onChange={e => setClientForm({...clientForm, ruc: e.target.value})} className="w-full p-10 bg-slate-50 rounded-[3.5rem] border-2 border-transparent font-black text-slate-900 shadow-inner outline-none text-center font-mono focus:bg-white transition-all text-xl"/>
+                                <label className="text-[13px] font-black text-slate-500 ml-12 uppercase tracking-widest text-center block">RUC (11 Dígitos)</label>
+                                <input type="text" placeholder="20XXXXXXXXX" value={clientForm.ruc} onChange={e => setClientForm({...clientForm, ruc: e.target.value})} className="w-full p-10 bg-white/5 rounded-[3.5rem] border-2 border-white/10 font-black text-white shadow-inner outline-none text-center font-mono focus:bg-white/10 transition-all text-3xl placeholder:text-slate-700"/>
                             </div>
                             <div className="space-y-6">
-                                <label className="text-[13px] font-black text-slate-400 ml-12 uppercase tracking-widest leading-none">Sector Operativo</label>
-                                <select value={clientForm.sector} onChange={e => setClientForm({...clientForm, sector: e.target.value})} className="w-full p-10 bg-slate-50 rounded-[3.5rem] border-2 border-transparent font-black text-slate-900 shadow-inner outline-none appearance-none cursor-pointer text-center text-[14px] uppercase tracking-[0.4em]">
+                                <label className="text-[13px] font-black text-slate-500 ml-12 uppercase tracking-widest text-center block">Sector Principal</label>
+                                <select value={clientForm.sector} onChange={e => setClientForm({...clientForm, sector: e.target.value})} className="w-full p-10 bg-white/5 rounded-[3.5rem] border-2 border-white/10 font-black text-white shadow-inner outline-none appearance-none cursor-pointer text-center text-[15px] uppercase tracking-[0.4em]">
                                     <option value="Agricultura">AGRICULTURA</option>
                                     <option value="Construcción">CONSTRUCCIÓN</option>
                                     <option value="Exportación">EXPORTACIÓN</option>
@@ -503,36 +417,39 @@ export default function App() {
                         </div>
                     </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-20 pb-32">
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-20">
                         {clients.map((c) => {
-                            const risk = calculateTaxRisk(c.ruc, c.taxStatus);
-                            const isDeclared = c.taxStatus === 'declared';
+                            const style = getRiskStyle(c.ruc, c.taxStatus);
                             return (
-                                <div key={c.id} className="bg-white p-20 rounded-[7rem] border-2 border-slate-50 flex flex-col justify-between items-start group shadow-[0_40px_80px_-20px_rgba(0,0,0,0.05)] hover:shadow-[0_80px_150px_-30px_rgba(14,165,233,0.12)] transition-all duration-700 relative overflow-hidden animate-in slide-in-from-bottom-20 border-b-8 border-slate-100 hover:border-sky-500">
+                                <div key={c.id} className="bg-white p-20 rounded-[7rem] border-2 border-slate-50 flex flex-col justify-between items-start group shadow-[0_40px_80px_-20px_rgba(0,0,0,0.05)] hover:shadow-[0_80px_150px_-30px_rgba(14,165,233,0.15)] transition-all duration-700 relative overflow-hidden animate-in slide-in-from-bottom-20 border-b-[20px] hover:border-[#0EA5E9]" style={{ borderBottomColor: style.tx.includes('rose') ? '#F43F5E' : (style.tx.includes('emerald') ? '#10B981' : '#F8FAFC') }}>
                                     <div className="w-full">
                                         <div className="flex justify-between items-start mb-16">
-                                            <div className="w-28 h-28 bg-slate-50 rounded-[2.5rem] flex items-center justify-center text-slate-800 shadow-inner group-hover:bg-[#020617] group-hover:text-white transition-all duration-700 shadow-md border border-slate-100"><Building2 size={52}/></div>
-                                            <div className={`px-10 py-4 rounded-full text-[13px] font-black uppercase tracking-[0.3em] border-2 transition-all duration-500 ${risk.bg} ${risk.tx} ${risk.ring} ${risk.text === 'VENCE HOY' ? 'animate-pulse' : ''}`}>{risk.text}</div>
+                                            <div className="w-28 h-28 bg-slate-50 rounded-[2.5rem] flex items-center justify-center text-[#020617] shadow-inner group-hover:bg-[#020617] group-hover:text-white transition-all duration-700 border border-slate-100 shadow-md">
+                                                <Building2 size={56}/>
+                                            </div>
+                                            <div className={`px-10 py-4 rounded-full text-[14px] font-black uppercase tracking-[0.4em] border-2 transition-all duration-500 ${style.bg} ${style.tx} ${style.ring}`}>
+                                                {style.text}
+                                            </div>
                                         </div>
-                                        <h3 className="font-black text-slate-900 uppercase text-4xl leading-[1.05] tracking-tighter group-hover:text-sky-600 transition-colors duration-500 mb-8">{String(c.name)}</h3>
-                                        <div className="flex flex-wrap items-center gap-6 pt-8 border-t-2 border-slate-50">
-                                              <span className="text-[16px] font-black text-slate-400 font-mono tracking-widest leading-none bg-slate-50 px-6 py-3 rounded-2xl border border-slate-100 shadow-inner">RUC {String(c.ruc)}</span>
-                                              <span className="text-[12px] font-black text-sky-500 uppercase tracking-[0.3em] leading-none flex items-center gap-4">
-                                                 <div className="w-3 h-3 rounded-full bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.8)]"></div> {String(c.sector)}
+                                        <h3 className="font-black text-[#020617] uppercase text-5xl leading-[1] tracking-tighter group-hover:text-[#0EA5E9] transition-colors duration-500 mb-10">{String(c.name)}</h3>
+                                        <div className="flex flex-wrap items-center gap-8 pt-10 border-t-2 border-slate-50">
+                                              <span className="text-[20px] font-black text-slate-400 font-mono tracking-widest leading-none bg-slate-50 px-8 py-4 rounded-2xl border border-slate-100 shadow-inner">RUC {String(c.ruc)}</span>
+                                              <span className="text-[14px] font-black text-[#10B981] uppercase tracking-[0.4em] leading-none flex items-center gap-5">
+                                                 <div className="w-4 h-4 rounded-full bg-[#10B981] shadow-[0_0_15px_rgba(16,185,129,0.8)] animate-pulse"></div> {String(c.sector)}
                                               </span>
                                         </div>
                                     </div>
                                     
-                                    <div className="w-full flex justify-between items-center mt-20 pt-14 border-t-2 border-slate-50">
+                                    <div className="w-full flex justify-between items-center mt-20 pt-16 border-t-2 border-slate-50">
                                         <div className="flex items-center gap-6">
-                                           <button onClick={() => markAsDeclared(c.id)} className={`p-8 rounded-[2.2rem] transition-all duration-500 shadow-2xl active:scale-90 border-2 ${isDeclared ? 'bg-[#10B981] text-white border-emerald-400 shadow-emerald-200' : 'bg-slate-50 text-slate-400 border-slate-100 hover:bg-emerald-100 hover:text-emerald-700 hover:border-emerald-200'}`}>
-                                              <CheckCircle2 size={36}/>
+                                           <button onClick={() => markAsDeclared(c.id)} className={`p-8 rounded-[2.2rem] transition-all duration-500 shadow-2xl active:scale-90 border-2 ${c.taxStatus === 'declared' ? 'bg-[#10B981] text-white border-[#10B981] shadow-[#10B981]/30' : 'bg-slate-50 text-slate-400 border-slate-100 hover:bg-[#10B981] hover:text-white hover:border-[#10B981]'}`}>
+                                              <CheckCircle2 size={40}/>
                                            </button>
-                                           <button onClick={() => handleEditClient(c)} className="p-8 rounded-[2.2rem] bg-slate-50 text-slate-400 hover:bg-sky-600 hover:text-white transition-all duration-500 border-2 border-slate-100 shadow-xl shadow-sky-100/20">
-                                              <Edit size={36}/>
+                                           <button onClick={() => handleEditClient(c)} className="p-8 rounded-[2.2rem] bg-slate-50 text-slate-400 hover:bg-[#0EA5E9] hover:text-white transition-all duration-500 border-2 border-slate-100 shadow-xl shadow-[#0EA5E9]/10">
+                                              <Edit size={40}/>
                                            </button>
                                         </div>
-                                        <button onClick={() => deleteDocGeneric('clients', c.id)} className="text-slate-100 hover:text-rose-600 transition-colors p-8 hover:bg-rose-50 rounded-[2.2rem] duration-500"><Trash2 size={40}/></button>
+                                        <button onClick={() => deleteDocGeneric('clients', c.id)} className="text-slate-100 hover:text-rose-600 transition-colors p-8 hover:bg-rose-50 rounded-[2.2rem] duration-500"><Trash2 size={44}/></button>
                                     </div>
                                 </div>
                             );
@@ -541,34 +458,34 @@ export default function App() {
                 </div>
             )}
 
-            {/* BITÁCORA STAFF: EXECUTIVE AUDIT LOG */}
+            {/* BITÁCORA STAFF: ESTRUCTURA EJECUTIVA */}
             {viewMode === 'reports' && (
                 <div className="max-w-7xl mx-auto grid grid-cols-1 xl:grid-cols-3 gap-24 animate-in fade-in duration-700 pb-32">
-                    <div className="bg-white p-20 rounded-[6rem] border-2 border-slate-100 shadow-3xl h-fit sticky top-12 overflow-hidden group border-b-[12px] border-emerald-500">
-                        <div className="absolute top-0 right-0 w-80 h-80 bg-emerald-500/5 rounded-full blur-[100px] -mr-40 -mt-40"></div>
+                    <div className="bg-[#020617] p-20 rounded-[6rem] shadow-[0_80px_150px_-20px_rgba(0,0,0,0.4)] h-fit sticky top-12 overflow-hidden border-b-[20px] border-[#10B981]">
+                        <div className="absolute top-0 right-0 w-96 h-96 bg-[#10B981]/10 rounded-full blur-[100px] -mr-48 -mt-48 transition-all group-hover:bg-[#10B981]/20 duration-1000"></div>
                         
-                        <div className="flex items-center gap-10 mb-20 relative z-10">
-                           <div className="p-8 bg-emerald-50 rounded-[2.5rem] text-emerald-600 shadow-inner group-hover:scale-110 transition-transform duration-500 border border-emerald-100"><Timer size={52}/></div>
-                           <div className="space-y-3">
-                              <h2 className="text-4xl font-black text-[#020617] uppercase tracking-tighter leading-none">Bitácora</h2>
-                              <p className="text-[11px] font-black text-slate-400 uppercase tracking-[0.6em]">Staff Audit Diario</p>
+                        <div className="flex items-center gap-12 mb-20 relative z-10">
+                           <div className="p-8 bg-[#10B981] rounded-[2.5rem] text-white shadow-[0_0_30px_rgba(16,185,129,0.5)] transition-transform hover:scale-110 duration-500"><Timer size={56}/></div>
+                           <div className="space-y-4">
+                              <h2 className="text-4xl font-black text-white uppercase tracking-tighter leading-none">Bitácora</h2>
+                              <p className="text-[12px] font-black text-[#0EA5E9] uppercase tracking-[0.6em] leading-none">Staff Audit Diario</p>
                            </div>
                         </div>
-                        <div className="space-y-14 relative z-10">
+                        <div className="space-y-16 relative z-10">
                             <div className="space-y-6">
-                                <label className="text-[13px] font-black text-slate-400 ml-12 uppercase tracking-widest leading-none">Cronometría (Hora)</label>
-                                <input type="time" value={reportForm.time} onChange={e => setReportForm({...reportForm, time: e.target.value})} className="w-full p-9 bg-slate-50 rounded-[2.8rem] border-2 border-transparent font-black text-slate-800 shadow-inner outline-none focus:bg-white focus:ring-[15px] ring-emerald-500/5 transition-all text-xl"/>
+                                <label className="text-[14px] font-black text-slate-500 ml-12 uppercase tracking-widest leading-none">Cronometría (Hora)</label>
+                                <input type="time" value={reportForm.time} onChange={e => setReportForm({...reportForm, time: e.target.value})} className="w-full p-10 bg-white/5 rounded-[3.5rem] border-2 border-white/10 font-black text-white shadow-inner outline-none focus:bg-white/10 focus:border-[#0EA5E9] transition-all text-3xl"/>
                             </div>
                             <div className="space-y-6">
-                                <label className="text-[13px] font-black text-slate-400 ml-12 uppercase tracking-widest leading-none">Entidad Bajo Auditoría</label>
-                                <select value={reportForm.clientName} onChange={e => setReportForm({...reportForm, clientName: e.target.value})} className="w-full p-9 bg-slate-50 rounded-[2.8rem] border-2 border-transparent font-black text-slate-800 shadow-inner outline-none text-[14px] uppercase tracking-[0.3em] cursor-pointer appearance-none text-center">
+                                <label className="text-[14px] font-black text-slate-500 ml-12 uppercase tracking-widest leading-none">Entidad Bajo Auditoría</label>
+                                <select value={reportForm.clientName} onChange={e => setReportForm({...reportForm, clientName: e.target.value})} className="w-full p-10 bg-white/5 rounded-[3.5rem] border-2 border-white/10 font-black text-white shadow-inner outline-none text-[16px] uppercase tracking-[0.3em] cursor-pointer appearance-none text-center h-24">
                                     <option value="">SELECCIÓN NODO...</option>
-                                    {clients.map(c => <option key={c.id} value={c.name}>{String(c.name)}</option>)}
+                                    {clients.map(c => <option key={c.id} value={c.name} className="text-slate-900">{String(c.name)}</option>)}
                                 </select>
                             </div>
                             <div className="space-y-6">
-                                <label className="text-[13px] font-black text-slate-400 ml-12 uppercase tracking-widest leading-none">Labor Realizada</label>
-                                <textarea value={reportForm.description} onChange={e => setReportForm({...reportForm, description: e.target.value})} className="w-full p-12 bg-slate-50 rounded-[3.5rem] border-2 border-transparent resize-none h-80 font-medium text-slate-700 shadow-inner text-[20px] leading-relaxed outline-none focus:bg-white transition-all placeholder:text-slate-200" placeholder="Reporte el avance contable o tributario..."></textarea>
+                                <label className="text-[14px] font-black text-slate-500 ml-12 uppercase tracking-widest leading-none">Labor Operativa Detallada</label>
+                                <textarea value={reportForm.description} onChange={e => setReportForm({...reportForm, description: e.target.value})} className="w-full p-12 bg-white/5 rounded-[4rem] border-2 border-white/10 resize-none h-96 font-medium text-white shadow-inner text-[22px] leading-relaxed outline-none focus:bg-white/10 focus:border-[#0EA5E9] transition-all placeholder:text-slate-700" placeholder="Reporte el avance contable, tributario o fiscal detallado..."></textarea>
                             </div>
                             <button onClick={async () => {
                                 if(!reportForm.description || !reportForm.clientName) return;
@@ -578,48 +495,55 @@ export default function App() {
                                   createdAt: Timestamp.now() 
                                 });
                                 setReportForm({ ...reportForm, description: '', time: '' });
-                            }} className="w-full bg-[#10B981] text-white py-12 rounded-[4.5rem] font-black text-[15px] uppercase tracking-[0.7em] shadow-[0_50px_100px_-20px_rgba(16,185,129,0.5)] hover:bg-emerald-700 transition-all active:scale-95 group flex items-center justify-center gap-8 border-2 border-emerald-400/30">
-                               <Timer size={32} className="group-hover:rotate-12 transition-transform"/> Grabar Avance
+                            }} className="w-full bg-[#10B981] text-white py-12 rounded-[5rem] font-black text-[18px] uppercase tracking-[0.8em] shadow-[0_50px_100px_-20px_rgba(16,185,129,0.5)] hover:bg-emerald-700 transition-all active:scale-95 group flex items-center justify-center gap-10 border-2 border-white/20">
+                               <Timer size={40} className="group-hover:rotate-12 transition-transform"/> GRABAR AVANCE
                             </button>
                         </div>
                     </div>
 
-                    <div className="xl:col-span-2 bg-white p-20 rounded-[7rem] border-2 border-slate-50 shadow-sm min-h-[1200px] overflow-hidden">
-                        <div className="flex flex-col md:flex-row justify-between items-start md:items-center border-b-2 border-slate-50 pb-20 mb-24 gap-12">
-                            <div className="space-y-4">
-                               <h3 className="font-black text-slate-900 text-5xl uppercase tracking-tighter leading-none">Historial Maestro</h3>
-                               <p className="text-[13px] font-black text-slate-400 uppercase tracking-[0.6em]">Control de Productividad por Auditor</p>
+                    <div className="xl:col-span-2 bg-white p-24 rounded-[8rem] border-2 border-slate-50 shadow-sm min-h-[1400px] overflow-hidden">
+                        <div className="flex flex-col md:flex-row justify-between items-start md:items-center border-b-4 border-slate-50 pb-20 mb-24 gap-12">
+                            <div className="space-y-6">
+                               <h3 className="font-black text-[#020617] text-6xl uppercase tracking-tighter leading-none italic">Auditoría Global</h3>
+                               <p className="text-[15px] font-black text-slate-400 uppercase tracking-[0.8em] leading-none flex items-center gap-6">
+                                 <div className="w-16 h-1 bg-[#0EA5E9]"></div> Registro Maestro de Productividad
+                               </p>
                             </div>
-                            <div className="bg-slate-50 px-12 py-6 rounded-full border-2 border-slate-100 text-[15px] font-black text-slate-600 uppercase tracking-[0.3em] shadow-inner flex items-center gap-6">
-                               <Clock size={24} className="text-sky-600"/> {String(getTodayISO())}
+                            <div className="bg-[#020617] px-14 py-8 rounded-full text-[18px] font-black text-[#0EA5E9] uppercase tracking-[0.4em] shadow-2xl flex items-center gap-8 border-2 border-white/10 animate-in fade-in zoom-in duration-1000">
+                               <Clock size={32} className="animate-pulse"/> {String(getTodayISO())}
                             </div>
                         </div>
                         
-                        <div className="space-y-20 relative border-l-[10px] border-slate-50 ml-14 pb-40">
+                        <div className="space-y-24 relative border-l-[15px] border-slate-50 ml-16 pb-48">
                             {reports.length > 0 ? (
                                 reports.map((r, i) => (
-                                    <div key={r.id} className="relative pl-20 animate-in slide-in-from-left-20 duration-700" style={{ animationDelay: `${i * 100}ms` }}>
-                                        <div className="absolute -left-[29px] top-2 w-12 h-12 rounded-full bg-[#10B981] border-[10px] border-white shadow-3xl ring-[20px] ring-emerald-50/50 group hover:scale-125 transition-transform duration-500"></div>
-                                        <div className="bg-slate-50/40 p-14 rounded-[6rem] border-2 border-slate-100 flex flex-col md:flex-row md:justify-between md:items-start gap-12 hover:bg-white hover:shadow-[0_80px_150px_-30px_rgba(0,0,0,0.1)] hover:border-emerald-200 transition-all duration-700 group relative">
+                                    <div key={r.id} className="relative pl-24 animate-in slide-in-from-left-24 duration-700" style={{ animationDelay: `${i * 100}ms` }}>
+                                        <div className="absolute -left-[37px] top-2 w-14 h-14 rounded-full bg-[#10B981] border-[12px] border-white shadow-3xl ring-[25px] ring-[#10B981]/10 group hover:scale-150 transition-transform duration-500"></div>
+                                        <div className="bg-slate-50/50 p-16 rounded-[7rem] border-2 border-slate-100 flex flex-col md:flex-row md:justify-between md:items-start gap-14 hover:bg-white hover:shadow-[0_100px_200px_-50px_rgba(0,0,0,0.15)] hover:border-[#10B981]/30 transition-all duration-700 group relative overflow-hidden">
                                             <div className="flex-1">
-                                                <div className="flex flex-wrap items-center gap-8 mb-10">
-                                                    <span className="text-[13px] font-black text-emerald-700 uppercase tracking-[0.4em] bg-emerald-50 px-8 py-4 rounded-full border-2 border-emerald-100 leading-none shadow-sm">{String(r.clientName)}</span>
-                                                    <span className="text-[13px] font-mono font-black text-slate-400 leading-none uppercase tracking-[0.3em] bg-white px-6 py-4 rounded-2xl border-2 border-slate-100 shadow-inner">{String(r.time)}</span>
+                                                <div className="flex flex-wrap items-center gap-10 mb-12">
+                                                    <span className="text-[16px] font-black text-[#10B981] uppercase tracking-[0.5em] bg-[#10B981]/10 px-10 py-5 rounded-full border-2 border-[#10B981]/20 leading-none shadow-sm">{String(r.clientName)}</span>
+                                                    <span className="text-[16px] font-mono font-black text-slate-400 leading-none uppercase tracking-[0.4em] bg-white px-8 py-5 rounded-3xl border-2 border-slate-100 shadow-inner">{String(r.time)}</span>
                                                 </div>
-                                                <p className="text-[28px] font-bold text-slate-800 leading-tight italic group-hover:text-black transition-colors duration-500 font-serif">"{String(r.description)}"</p>
-                                                <div className="mt-16 flex items-center gap-8 text-[14px] font-black text-slate-400 uppercase tracking-[0.5em]">
-                                                    <div className="w-18 h-18 rounded-[1.8rem] bg-slate-200 flex items-center justify-center text-slate-600 font-black text-2xl group-hover:bg-[#10B981] group-hover:text-white transition-all shadow-inner border border-slate-100">{r.userName?.charAt(0)}</div>
-                                                    Auditor Responsable: <span className="text-slate-900 ml-3">{String(r.userName)}</span>
+                                                <p className="text-[34px] font-bold text-[#020617] leading-tight italic group-hover:text-black transition-colors duration-500 font-serif drop-shadow-sm">"{String(r.description)}"</p>
+                                                <div className="mt-20 flex items-center gap-10 text-[16px] font-black text-slate-400 uppercase tracking-[0.6em]">
+                                                    <div className="w-24 h-24 rounded-[2.5rem] bg-white border-2 border-slate-100 flex items-center justify-center text-[#10B981] font-black text-4xl group-hover:bg-[#10B981] group-hover:text-white transition-all shadow-xl group-hover:rotate-6">
+                                                      {r.userName?.charAt(0)}
+                                                    </div>
+                                                    <div>
+                                                      <span className="block text-[#020617] text-2xl tracking-tighter mb-2">{String(r.userName)}</span>
+                                                      <span className="block opacity-60">Auditor Responsable</span>
+                                                    </div>
                                                 </div>
                                             </div>
-                                            <button onClick={async () => { if(window.confirm("¿Eliminar reporte definitivo?")) await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'reports', r.id)) }} className="text-slate-100 hover:text-rose-600 p-8 transition-all duration-500 opacity-0 group-hover:opacity-100 relative z-20"><Trash2 size={40}/></button>
+                                            <button onClick={async () => { if(window.confirm("¿Eliminar registro definitivo?")) await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'reports', r.id)) }} className="text-slate-100 hover:text-rose-600 p-10 transition-all duration-500 opacity-0 group-hover:opacity-100 relative z-20"><Trash2 size={48}/></button>
                                         </div>
                                     </div>
                                 ))
                             ) : (
-                                <div className="py-80 text-center opacity-30 italic">
-                                    <Activity size={120} className="mx-auto mb-12 text-slate-200 animate-pulse"/>
-                                    <p className="text-xl font-black text-slate-300 uppercase tracking-[0.8em]">Nodo Vacío</p>
+                                <div className="py-96 text-center opacity-30">
+                                    <Activity size={180} className="mx-auto mb-16 text-slate-200 animate-pulse"/>
+                                    <p className="text-2xl font-black text-slate-300 uppercase tracking-[1em]">NODO DE DATOS VACÍO</p>
                                 </div>
                             )}
                         </div>
@@ -627,18 +551,88 @@ export default function App() {
                 </div>
             )}
 
+            {/* GESTIÓN DE STAFF: DISTRIBUCIÓN XL */}
+            {viewMode === 'users' && isAdmin && (
+                <div className="max-w-7xl mx-auto space-y-24 animate-in fade-in zoom-in-95 duration-700 pb-32">
+                    <div className="bg-[#020617] p-20 rounded-[6rem] shadow-[0_60px_120px_-20px_rgba(0,0,0,0.4)] relative overflow-hidden group">
+                        <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-[#10B981]/10 rounded-full blur-[120px] -mr-64 -mt-64 transition-all group-hover:bg-[#10B981]/20 duration-1000"></div>
+                        
+                        <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-16 border-b border-white/5 pb-20 mb-20 relative z-10">
+                           <div className="space-y-6">
+                              <h2 className="text-7xl font-black text-white tracking-tighter uppercase leading-none italic">Gestión Personal</h2>
+                              <p className="text-[14px] font-bold text-[#10B981] uppercase tracking-[0.6em] flex items-center gap-10 italic leading-none">
+                                 <div className="w-20 h-1.5 bg-[#0EA5E9]"></div> Control de Auditores y Asistentes
+                              </p>
+                           </div>
+                           <div className="flex items-center gap-8">
+                              {editingUserId && (
+                                <button onClick={() => { setEditingUserId(null); setUserForm({ name: '', username: '', password: '', role: 'Auditor', hourlyCost: '' }); }} className="bg-white/5 text-slate-400 px-14 py-8 rounded-[3rem] text-[13px] font-black uppercase tracking-widest hover:bg-rose-600 hover:text-white transition-all border border-white/10 flex items-center gap-5">
+                                   <X size={24}/> CANCELAR
+                                </button>
+                              )}
+                              <button onClick={handleSaveUser} className={`px-24 py-9 rounded-[4rem] text-[16px] font-black uppercase tracking-[0.5em] text-white shadow-3xl hover:scale-[1.05] transition-all flex items-center gap-8 border-2 border-white/20 active:scale-95 ${editingUserId ? 'bg-[#0EA5E9]' : 'bg-[#10B981]'}`}>
+                                 {editingUserId ? <><Save size={32}/> GUARDAR CAMBIOS</> : <><UserPlus size={32}/> NUEVO AUDITOR</>}
+                              </button>
+                           </div>
+                        </div>
+                        
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-16 relative z-10">
+                            <div className="space-y-6">
+                                <label className="text-[13px] font-black text-slate-500 ml-12 uppercase tracking-widest">Nombre del Auditor</label>
+                                <input type="text" placeholder="CPC JUAN PÉREZ" value={userForm.name} onChange={e => setUserForm({...userForm, name: e.target.value})} className="w-full p-10 bg-white/5 rounded-[3.5rem] border-2 border-white/10 font-black text-white shadow-inner outline-none focus:bg-white/10 focus:border-[#0EA5E9] transition-all uppercase tracking-tight text-2xl placeholder:text-slate-700"/>
+                            </div>
+                            <div className="space-y-6">
+                                <label className="text-[13px] font-black text-slate-500 ml-12 uppercase tracking-widest">ID de Acceso</label>
+                                <input type="text" placeholder="jperez_nysem" value={userForm.username} onChange={e => setUserForm({...userForm, username: e.target.value})} className="w-full p-10 bg-white/5 rounded-[3.5rem] border-2 border-white/10 font-black text-white shadow-inner outline-none focus:bg-white/10 focus:border-[#0EA5E9] transition-all uppercase tracking-tight text-2xl placeholder:text-slate-700"/>
+                            </div>
+                            <div className="space-y-6">
+                                <label className="text-[13px] font-black text-slate-500 ml-12 uppercase tracking-widest">Firma Digital</label>
+                                <input type="text" placeholder="********" value={userForm.password} onChange={e => setUserForm({...userForm, password: e.target.value})} className="w-full p-10 bg-white/5 rounded-[3.5rem] border-2 border-white/10 font-black text-white shadow-inner outline-none focus:bg-white/10 focus:border-[#0EA5E9] transition-all uppercase tracking-tight text-2xl placeholder:text-slate-700"/>
+                            </div>
+                            <div className="space-y-6">
+                                <label className="text-[13px] font-black text-slate-500 ml-12 uppercase tracking-widest">Rango Nodo</label>
+                                <select value={userForm.role} onChange={e => setUserForm({...userForm, role: e.target.value})} className="w-full p-10 bg-white/5 rounded-[3.5rem] border-2 border-white/10 font-black text-white shadow-inner outline-none appearance-none cursor-pointer text-center text-[15px] uppercase tracking-[0.4em]">
+                                    <option value="Auditor">AUDITOR (STAFF)</option>
+                                    <option value="Administrador">ADMINISTRADOR (CPC)</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-20 pb-32">
+                        {users.map((u) => (
+                            <div key={u.id} className="bg-white p-20 rounded-[7rem] border-2 border-slate-50 flex flex-col justify-between items-start group shadow-sm hover:shadow-[0_80px_150px_-30px_rgba(0,0,0,0.1)] transition-all duration-700 animate-in slide-in-from-bottom-20 border-b-[20px] hover:border-[#10B981]">
+                                <div className="w-full">
+                                    <div className="flex justify-between items-start mb-16">
+                                        <div className="w-28 h-28 bg-slate-50 rounded-[2.5rem] flex items-center justify-center text-[#020617] shadow-inner group-hover:bg-[#10B981] group-hover:text-white transition-all duration-700 border border-slate-100 shadow-md">
+                                            <UserCog size={56}/>
+                                        </div>
+                                        <div className={`px-10 py-4 rounded-full text-[14px] font-black uppercase tracking-[0.4em] border-2 transition-all duration-500 ${u.role === 'Administrador' ? 'bg-indigo-50 text-indigo-700 border-indigo-100' : 'bg-[#0EA5E9]/10 text-[#0EA5E9] border-[#0EA5E9]/20'}`}>{u.role}</div>
+                                    </div>
+                                    <h3 className="font-black text-[#020617] uppercase text-5xl leading-[1] tracking-tighter group-hover:text-[#10B981] transition-colors duration-500 mb-10">{u.name}</h3>
+                                    <p className="text-[20px] font-black text-slate-300 font-mono tracking-[0.5em] uppercase opacity-80 bg-slate-50 p-6 rounded-3xl w-fit border border-slate-100 shadow-inner">ID: {u.username}</p>
+                                </div>
+                                <div className="w-full flex justify-between items-center mt-24 pt-16 border-t-2 border-slate-50">
+                                    <button onClick={() => handleEditUser(u)} className="p-8 rounded-[2.2rem] bg-slate-50 text-slate-400 hover:bg-[#0EA5E9] hover:text-white transition-all shadow-xl shadow-[#0EA5E9]/10 border-2 border-slate-100 active:scale-90"><Edit size={40}/></button>
+                                    <button onClick={() => deleteDocGeneric('users', u.id)} className="text-slate-100 hover:text-rose-600 transition-colors p-8 hover:bg-rose-50 rounded-[2.2rem] duration-500 active:scale-90"><Trash2 size={44}/></button>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            )}
+
           </div>
           
-          {/* FOOTER: ROYAL DARK */}
-          <footer className="h-20 bg-[#020617] flex items-center px-24 justify-between text-[11px] font-black text-slate-600 uppercase tracking-[0.7em] z-50 border-t border-white/5">
+          <footer className="h-20 bg-[#020617] flex items-center px-24 justify-between text-[11px] font-black text-slate-600 uppercase tracking-[0.7em] z-50 border-t-4 border-[#0EA5E9]/20">
              <span>Nysem Montalbán EIRL • Consultoría Especializada 2026</span>
              <span className="flex items-center gap-14">
-                <span className="flex items-center gap-4 text-sky-500">
-                   <div className="w-3.5 h-3.5 rounded-full bg-emerald-500 shadow-[0_0_20px_rgba(16,185,129,1)]"></div> CIFRADO AES-256
+                <span className="flex items-center gap-4 text-[#0EA5E9] font-black">
+                   <div className="w-3.5 h-3.5 rounded-full bg-[#10B981] shadow-[0_0_20px_rgba(16,185,129,1)]"></div> CONEXIÓN SEGURA
                 </span>
                 <span className="text-white/5 font-thin text-3xl">|</span>
                 <span className="flex items-center gap-6 group cursor-help">
-                   <Shield size={18} className="text-slate-700 group-hover:text-sky-400 transition-colors"/> ROYAL AUDIT v20.0
+                   <Shield size={18} className="text-slate-700 group-hover:text-[#0EA5E9] transition-colors"/> ROYAL AUDIT v21.0.0
                 </span>
              </span>
           </footer>
