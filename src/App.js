@@ -4,7 +4,8 @@ import {
   FileText, CheckCircle2, Building2, AlertTriangle, Shield, 
   Plus, Trash2, Calendar, DollarSign, History, Lock, Database, 
   Server, LogIn, LogOut, Clock, AlertCircle, 
-  Settings, Search, ChevronRight, Briefcase, TrendingUp, Layers
+  Settings, Search, ChevronRight, Briefcase, TrendingUp, Layers,
+  Activity, Zap, Globe, UserPlus, UserCog, BadgeCheck
 } from 'lucide-react';
 
 // Firebase v11+ Implementation
@@ -19,11 +20,10 @@ import {
 
 /**
  * NYSEM MONTALBAN EIRL - SISTEMA DE GESTIÓN DE PRODUCCIÓN (SGP)
- * VERSIÓN 15.0.0 - ENTERPRISE EXECUTIVE UI
- * PROYECTO: nysem-sgp-prod
+ * VERSIÓN 17.0.0 - PROFESSIONAL STAFF MANAGER
+ * DISEÑO: Interfaz Amigable de Alto Impacto Gerencial
  */
 
-// --- CONFIGURACIÓN DE SEGURIDAD (PROTOCOLO REACT_APP PARA VERCEL) ---
 const firebaseConfig = {
   apiKey: process.env.REACT_APP_FIREBASE_API_KEY || (typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config).apiKey : ""),
   authDomain: process.env.REACT_APP_FIREBASE_AUTH_DOMAIN || (typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config).authDomain : ""),
@@ -46,7 +46,6 @@ if (isConfigValid) {
   }
 }
 
-const DB_PATH = "nysem_sgp_production_v13";
 const getTodayISO = () => new Date().toISOString().split('T')[0];
 
 export default function App() {
@@ -62,21 +61,23 @@ export default function App() {
   const [clients, setClients] = useState([]);
   const [reports, setReports] = useState([]);
 
+  // Forms
   const [loginForm, setLoginForm] = useState({ username: '', password: '' });
-  const [clientForm, setClientForm] = useState({ name: '', ruc: '', fee: '', sector: 'Servicios' });
+  const [clientForm, setClientForm] = useState({ name: '', ruc: '', sector: 'Servicios', honorario: '' });
+  const [userForm, setUserForm] = useState({ name: '', username: '', password: '', role: 'Auditor', hourlyCost: '' });
   const [reportForm, setReportForm] = useState({ time: '', description: '', date: getTodayISO(), clientName: '' });
 
-  // --- LÓGICA PROFESIONAL: SEMÁFORO TRIBUTARIO SUNAT ---
+  // --- LÓGICA DE RIESGO SUNAT ---
   const calculateTaxRisk = (ruc, taxStatus) => {
-    if (!ruc) return { color: 'slate', text: 'Sin RUC', level: 0 }; 
-    if (taxStatus === 'declared') return { color: 'emerald', text: 'Declarado', level: 0 };
+    if (!ruc) return { color: 'slate', bg: 'bg-slate-50', text: 'text-slate-500', label: 'Sin RUC' }; 
+    if (taxStatus === 'declared') return { color: 'emerald', bg: 'bg-emerald-50', text: 'text-emerald-600', label: 'Declarado' };
     const rucStr = String(ruc).trim();
     const lastDigit = parseInt(rucStr.charAt(rucStr.length - 1));
-    if (isNaN(lastDigit)) return { color: 'slate', text: 'Inválido', level: 0 };
+    if (isNaN(lastDigit)) return { color: 'slate', bg: 'bg-slate-50', text: 'text-slate-500', label: 'Inválido' };
     
-    if ([0, 1, 2].includes(lastDigit)) return { color: 'rose', text: 'CRÍTICO: VENCE HOY', level: 3 }; 
-    if ([3, 4, 5, 6].includes(lastDigit)) return { color: 'amber', text: 'PRÓXIMO VENCIMIENTO', level: 2 }; 
-    return { color: 'blue', text: 'DENTRO DE PLAZO', level: 1 }; 
+    if ([0, 1, 2].includes(lastDigit)) return { color: 'rose', bg: 'bg-rose-50', text: 'text-rose-600', label: 'VENCE HOY' }; 
+    if ([3, 4, 5, 6].includes(lastDigit)) return { color: 'amber', bg: 'bg-amber-50', text: 'text-amber-600', label: 'PRÓXIMO' }; 
+    return { color: 'blue', bg: 'bg-blue-50', text: 'text-blue-600', label: 'EN PLAZO' }; 
   };
 
   useEffect(() => {
@@ -88,11 +89,7 @@ export default function App() {
       try {
         await signInAnonymously(auth);
       } catch (err) {
-        if (err.code === 'auth/configuration-not-found') {
-          setAccessError("Habilite 'Anonymous Sign-in' en Firebase Console.");
-        } else {
-          setAccessError(`Cloud Sync Error: ${err.message}`);
-        }
+        setAccessError(`Cloud Sync Error: ${err.message}`);
       } finally {
         setIsInitializing(false);
       }
@@ -104,9 +101,10 @@ export default function App() {
 
   useEffect(() => {
     if (!fbUser || !db) return;
-    const unsubUsers = onSnapshot(collection(db, 'artifacts', 'nysem_app', 'public', 'data', 'users'), (snap) => {
-      const data = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      setUsers(data);
+    
+    const usersRef = collection(db, 'artifacts', 'nysem_app', 'public', 'data', 'users');
+    const unsubUsers = onSnapshot(usersRef, (snap) => {
+      setUsers(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
     });
 
     let unsubClients, unsubReports;
@@ -128,24 +126,38 @@ export default function App() {
 
   const handleLogin = (e) => {
     if (e) e.preventDefault();
-    if (loginForm.username === 'admin' && loginForm.password === 'admin') {
-      setCurrentUserData({ name: 'CPC Nysem Montalbán', role: 'admin' });
+    const { username, password } = loginForm;
+    
+    // Credencial Maestra CPC Nysem
+    if (username === 'admin' && password === 'admin') {
+      setCurrentUserData({ name: 'CPC Nysem Montalbán', role: 'Administrador' });
       setIsLoggedIn(true);
       return;
     }
-    const found = users.find(u => u.username === loginForm.username && u.password === loginForm.password);
+
+    const found = users.find(u => u.username === username && u.password === password);
     if (found) {
       setCurrentUserData(found);
       setIsLoggedIn(true);
       setAccessError(null);
     } else {
-      setAccessError("Credenciales incorrectas.");
+      setAccessError("Identidad no reconocida en el nodo.");
     }
   };
 
   const handleLogout = () => {
     setIsLoggedIn(false);
     setCurrentUserData(null);
+    setViewMode('dashboard');
+  };
+
+  // --- OPERACIONES FIREBASE ---
+  const handleAddUser = async () => {
+    if (!userForm.name || !userForm.username || !userForm.password) return;
+    await addDoc(collection(db, 'artifacts', 'nysem_app', 'public', 'data', 'users'), { 
+      ...userForm, createdAt: Timestamp.now() 
+    });
+    setUserForm({ name: '', username: '', password: '', role: 'Auditor', hourlyCost: '' });
   };
 
   const handleAddClient = async () => {
@@ -153,78 +165,55 @@ export default function App() {
     await addDoc(collection(db, 'artifacts', 'nysem_app', 'public', 'data', 'clients'), { 
       ...clientForm, taxStatus: 'pending', createdAt: Timestamp.now() 
     });
-    setClientForm({ name: '', ruc: '', fee: '', sector: 'Servicios' });
+    setClientForm({ name: '', ruc: '', sector: 'Servicios', honorario: '' });
   };
 
   const markAsDeclared = async (clientId) => {
     await updateDoc(doc(db, 'artifacts', 'nysem_app', 'public', 'data', 'clients', clientId), { taxStatus: 'declared' });
   };
 
-  if (!isConfigValid) {
-    return (
-      <div className="h-screen flex items-center justify-center bg-slate-900 text-white p-10 font-sans">
-        <div className="max-w-xl w-full bg-slate-800 p-12 rounded-[3rem] border border-slate-700 shadow-2xl">
-          <div className="flex items-center gap-6 mb-8 text-amber-400">
-            <Settings className="animate-spin-slow" size={48} />
-            <h1 className="text-2xl font-black uppercase tracking-tighter">Sintonización Crítica <br/><span className="text-slate-500 text-lg">nysem-sgp-prod</span></h1>
-          </div>
-          <p className="text-slate-400 text-sm mb-6 leading-relaxed italic">
-            Colega Montalbán, para que el sistema opere en Vercel, debe registrar las variables de entorno con el prefijo <span className="text-blue-400 font-bold">REACT_APP_</span>.
-          </p>
-          <div className="bg-black/40 p-6 rounded-3xl space-y-3 font-mono text-[10px] border border-slate-700">
-             <div className="flex justify-between"><span>REACT_APP_FIREBASE_API_KEY</span> <span className={firebaseConfig.apiKey ? 'text-emerald-500':'text-rose-500'}>{firebaseConfig.apiKey ? '[DETECTADA]':'[FALTA]'}</span></div>
-             <div className="flex justify-between"><span>REACT_APP_FIREBASE_PROJECT_ID</span> <span className={firebaseConfig.projectId ? 'text-emerald-500':'text-rose-500'}>{firebaseConfig.projectId ? '[DETECTADA]':'[FALTA]'}</span></div>
-          </div>
-        </div>
-      </div>
-    );
-  }
+  const deleteDocGeneric = async (col, id) => {
+    if (window.confirm("¿Confirmar eliminación permanente de este registro?")) {
+      await deleteDoc(doc(db, 'artifacts', 'nysem_app', 'public', 'data', col, id));
+    }
+  };
 
+  // --- INTERFAZ DE CARGA ---
   if (isInitializing) {
     return (
-      <div className="h-screen flex items-center justify-center bg-[#0F172A] text-white font-sans">
-        <div className="flex flex-col items-center gap-10 animate-in fade-in duration-1000">
-          <div className="relative flex items-center justify-center">
-             <div className="absolute w-24 h-24 border-2 border-blue-500/20 rounded-full"></div>
-             <div className="absolute w-24 h-24 border-t-2 border-blue-500 rounded-full animate-spin"></div>
-             <Shield className="text-blue-500" size={32}/>
-          </div>
+      <div className="h-screen flex items-center justify-center bg-white font-sans">
+        <div className="flex flex-col items-center gap-6 animate-pulse">
+          <RefreshCw className="text-blue-600 animate-spin" size={48} />
           <div className="text-center">
-             <p className="text-[10px] font-black tracking-[0.8em] uppercase text-blue-400 mb-2 leading-none">Nysem Montalbán EIRL</p>
-             <p className="text-[9px] text-slate-500 font-mono uppercase tracking-[0.2em] animate-pulse">Sincronizando Nodo de Gestión v15.0</p>
+             <p className="text-[10px] font-black tracking-[0.6em] uppercase text-blue-600">Nysem Montalbán EIRL</p>
+             <p className="text-[8px] text-slate-400 uppercase tracking-widest mt-2">Sincronizando Seguridad de Firma...</p>
           </div>
         </div>
       </div>
     );
   }
 
+  // --- LOGIN ---
   if (!isLoggedIn) {
     return (
-      <div className="h-screen flex items-center justify-center bg-slate-50 p-6 font-sans">
-        <div className="bg-white w-full max-w-lg rounded-[4rem] shadow-[0_50px_100px_-20px_rgba(0,0,0,0.12)] overflow-hidden border border-slate-100 flex flex-col">
-          <div className="bg-slate-900 p-12 text-center text-white relative overflow-hidden">
-            <div className="absolute top-0 right-0 w-64 h-64 bg-blue-600/10 rounded-full blur-[80px] -mr-32 -mt-32"></div>
-            <Shield className="mx-auto mb-6 text-blue-500 relative z-10" size={56}/>
-            <h1 className="text-3xl font-black uppercase tracking-tighter relative z-10 leading-none">Acceso Auditoría</h1>
-            <p className="text-[10px] font-black text-slate-500 uppercase tracking-[0.4em] mt-3 relative z-10 italic">Nysem Montalbán EIRL</p>
+      <div className="h-screen flex items-center justify-center bg-[#F1F5F9] p-6 font-sans">
+        <div className="bg-white w-full max-w-lg rounded-[3.5rem] shadow-2xl overflow-hidden border border-white flex flex-col">
+          <div className="bg-slate-900 p-12 text-center text-white relative">
+            <Shield className="mx-auto mb-6 text-blue-500" size={60}/>
+            <h1 className="text-3xl font-black uppercase tracking-tighter leading-none">Acceso Auditoría</h1>
+            <p className="text-[10px] font-bold text-slate-500 uppercase tracking-[0.4em] mt-3 italic">Control Contable & Gestión de Capital</p>
           </div>
-          <div className="p-14 space-y-10">
-            <div className="text-center space-y-1">
-               <h2 className="text-xl font-black text-slate-800 tracking-tight uppercase">Autenticación</h2>
-               <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Ingrese su Identificación de Staff</p>
-            </div>
+          <div className="p-12 space-y-8 bg-white">
             <form onSubmit={handleLogin} className="space-y-4">
               {accessError && (
-                <div className="p-4 bg-rose-50 border border-rose-100 rounded-2xl flex items-center gap-3 animate-in slide-in-from-top-2">
+                <div className="p-4 bg-rose-50 border border-rose-100 rounded-2xl flex items-center gap-3 animate-in fade-in zoom-in">
                   <AlertCircle className="text-rose-500 shrink-0" size={18}/>
-                  <p className="text-[10px] font-bold text-rose-800 leading-tight uppercase tracking-tight">{accessError}</p>
+                  <p className="text-[10px] font-bold text-rose-800 uppercase tracking-tight">{accessError}</p>
                 </div>
               )}
-              <div className="space-y-4">
-                <input type="text" placeholder="Usuario" value={loginForm.username} onChange={e => setLoginForm({...loginForm, username: e.target.value})} className="w-full p-6 bg-slate-50 rounded-[1.8rem] border border-transparent focus:border-blue-500/20 focus:bg-white transition-all font-bold text-slate-700 outline-none shadow-inner" required />
-                <input type="password" placeholder="Contraseña" value={loginForm.password} onChange={e => setLoginForm({...loginForm, password: e.target.value})} className="w-full p-6 bg-slate-50 rounded-[1.8rem] border border-transparent focus:border-blue-500/20 focus:bg-white transition-all font-bold text-slate-700 outline-none shadow-inner" required />
-              </div>
-              <button type="submit" className="w-full bg-slate-900 text-white py-6 rounded-[2.5rem] font-black text-[11px] uppercase tracking-[0.3em] hover:bg-blue-600 transition-all shadow-xl active:scale-95 mt-4">Validar Acceso</button>
+              <input type="text" placeholder="Usuario de Firma" value={loginForm.username} onChange={e => setLoginForm({...loginForm, username: e.target.value})} className="w-full p-6 bg-slate-50 rounded-[1.8rem] border-none font-bold text-slate-700 shadow-inner outline-none focus:ring-4 ring-blue-500/10 transition-all" required />
+              <input type="password" placeholder="Clave de Seguridad" value={loginForm.password} onChange={e => setLoginForm({...loginForm, password: e.target.value})} className="w-full p-6 bg-slate-50 rounded-[1.8rem] border-none font-bold text-slate-700 shadow-inner outline-none focus:ring-4 ring-blue-500/10 transition-all" required />
+              <button type="submit" className="w-full bg-blue-600 text-white py-6 rounded-[2.2rem] font-black text-[11px] uppercase tracking-[0.3em] hover:bg-blue-700 transition-all shadow-xl active:scale-95 mt-4">Validar Identidad</button>
             </form>
           </div>
         </div>
@@ -232,46 +221,45 @@ export default function App() {
     );
   }
 
+  const isAdmin = currentUserData?.role === 'Administrador';
+
   return (
     <div className="flex h-screen bg-[#F8FAFC] font-sans overflow-hidden animate-in fade-in duration-700">
-       {/* SIDEBAR EXECUTIVE */}
-       <aside className={`${sidebarOpen ? 'w-80' : 'w-24'} bg-slate-900 flex flex-col transition-all duration-500 shadow-2xl z-30 relative overflow-hidden`}>
-         <div className="h-28 flex items-center px-10 border-b border-white/5">
-            <div className="bg-gradient-to-br from-blue-500 to-indigo-600 p-3.5 rounded-[1.2rem] shadow-lg shadow-blue-500/20">
-              <Database className="text-white" size={24}/>
+       
+       {/* SIDEBAR */}
+       <aside className={`${sidebarOpen ? 'w-80' : 'w-24'} bg-white flex flex-col transition-all duration-500 border-r border-slate-100 z-30 shadow-sm`}>
+         <div className="h-28 flex items-center px-10 border-b border-slate-50">
+            <div className="bg-blue-600 p-3.5 rounded-2xl shadow-lg shadow-blue-600/20">
+              <Shield className="text-white" size={24}/>
             </div>
             {sidebarOpen && (
-              <div className="ml-5 animate-in fade-in slide-in-from-left-4">
-                <span className="block font-black text-2xl text-white tracking-tighter uppercase leading-none">Nysem SGP</span>
-                <span className="text-[9px] font-black text-slate-500 uppercase tracking-[0.4em] mt-1.5 block">Executive v15</span>
+              <div className="ml-5">
+                <span className="block font-black text-2xl text-slate-900 tracking-tighter uppercase leading-none">Nysem SGP</span>
+                <span className="text-[8px] font-black text-slate-400 uppercase tracking-[0.4em] mt-1.5 block">Audit Node v17</span>
               </div>
             )}
          </div>
 
-         <nav className="flex-1 p-8 space-y-3 overflow-y-auto custom-scrollbar">
-            <button onClick={() => setViewMode('dashboard')} className={`w-full flex items-center gap-5 p-5 rounded-[2rem] text-[11px] font-black uppercase tracking-widest transition-all group ${viewMode === 'dashboard' ? 'bg-blue-600 text-white shadow-[0_20px_40px_-10px_rgba(37,99,235,0.4)]' : 'text-slate-400 hover:bg-white/5'}`}>
-              <Home size={22} className={viewMode === 'dashboard' ? '' : 'group-hover:text-blue-400 transition-colors'}/> 
-              {sidebarOpen && "Dashboard Global"}
-            </button>
-            <button onClick={() => setViewMode('clients')} className={`w-full flex items-center gap-5 p-5 rounded-[2rem] text-[11px] font-black uppercase tracking-widest transition-all group ${viewMode === 'clients' ? 'bg-blue-600 text-white shadow-xl shadow-blue-500/30' : 'text-slate-400 hover:bg-white/5'}`}>
-              <Building2 size={22} className={viewMode === 'clients' ? '' : 'group-hover:text-blue-400 transition-colors'}/> 
-              {sidebarOpen && "Cartera Corporativa"}
-            </button>
-            <button onClick={() => setViewMode('reports')} className={`w-full flex items-center gap-5 p-5 rounded-[2rem] text-[11px] font-black uppercase tracking-widest transition-all group ${viewMode === 'reports' ? 'bg-blue-600 text-white shadow-xl shadow-blue-500/30' : 'text-slate-400 hover:bg-white/5'}`}>
-              <TrendingUp size={22} className={viewMode === 'reports' ? '' : 'group-hover:text-blue-400 transition-colors'}/> 
-              {sidebarOpen && "Auditoría de Producción"}
-            </button>
+         <nav className="flex-1 p-8 space-y-2 overflow-y-auto custom-scrollbar">
+            {[
+              { id: 'dashboard', label: 'Dashboard', icon: Home, show: true },
+              { id: 'clients', label: 'Cartera Clientes', icon: Building2, show: true },
+              { id: 'reports', label: 'Bitácora Staff', icon: Timer, show: true },
+              { id: 'users', label: 'Gestión de Staff', icon: UserCog, show: isAdmin }
+            ].filter(i => i.show).map((item) => (
+              <button key={item.id} onClick={() => setViewMode(item.id)} className={`w-full flex items-center gap-5 p-5 rounded-2xl text-[11px] font-black uppercase tracking-widest transition-all ${viewMode === item.id ? 'bg-blue-600 text-white shadow-xl shadow-blue-600/20' : 'text-slate-400 hover:bg-slate-50'}`}>
+                <item.icon size={22}/> {sidebarOpen && item.label}
+              </button>
+            ))}
          </nav>
 
-         <div className="p-8">
-            <div className="bg-white/5 p-5 rounded-[2.5rem] border border-white/5 flex items-center gap-5 relative overflow-hidden group">
-                <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white font-black text-xl shadow-xl transition-transform group-hover:scale-110">
-                  {currentUserData?.name?.charAt(0)}
-                </div>
+         <div className="p-8 border-t border-slate-50">
+            <div className="bg-slate-50 p-5 rounded-[2.2rem] flex items-center gap-5 border border-slate-100">
+                <div className="w-12 h-12 rounded-xl bg-slate-900 flex items-center justify-center text-white font-black text-lg">{currentUserData?.name?.charAt(0)}</div>
                 {sidebarOpen && (
-                  <div className="flex-1 overflow-hidden animate-in fade-in">
-                    <p className="text-[10px] font-black text-white truncate uppercase tracking-tight leading-none">{currentUserData?.name}</p>
-                    <button onClick={handleLogout} className="text-[8px] font-black text-blue-400 uppercase tracking-[0.3em] hover:text-rose-400 transition-colors mt-2.5 block">Cerrar Sesión</button>
+                  <div className="flex-1 overflow-hidden">
+                    <p className="text-[10px] font-black text-slate-900 truncate uppercase">{currentUserData?.name}</p>
+                    <button onClick={handleLogout} className="text-[8px] font-black text-rose-500 uppercase mt-1 tracking-widest">Cerrar Sesión</button>
                   </div>
                 )}
             </div>
@@ -279,174 +267,155 @@ export default function App() {
        </aside>
 
        <main className="flex-1 flex flex-col overflow-hidden relative">
-          <header className="h-28 bg-white/70 backdrop-blur-3xl border-b border-slate-100 flex items-center px-12 justify-between shadow-sm z-20">
+          
+          {/* HEADER */}
+          <header className="h-28 bg-white/70 backdrop-blur-xl border-b border-slate-100 flex items-center px-12 justify-between z-20">
             <div className="flex items-center gap-8">
-                <button onClick={() => setSidebarOpen(!sidebarOpen)} className="p-4 bg-white hover:bg-slate-50 rounded-[1.2rem] text-slate-400 transition-all shadow-sm border border-slate-100 group">
-                  <Menu size={20} className="group-hover:scale-110 transition-transform"/>
-                </button>
-                <div className="hidden xl:flex items-center gap-4 bg-slate-100/50 px-6 py-4 rounded-[1.5rem] border border-slate-100 transition-all focus-within:ring-4 ring-blue-500/10 focus-within:bg-white">
-                  <Search size={18} className="text-slate-400"/>
-                  <input type="text" placeholder="Buscar RUC, Cliente o Expediente..." className="bg-transparent border-none outline-none text-[11px] font-black text-slate-600 w-80 placeholder:text-slate-300 uppercase tracking-widest"/>
+                <button onClick={() => setSidebarOpen(!sidebarOpen)} className="p-4 bg-white hover:bg-slate-50 rounded-2xl text-slate-400 border border-slate-100 transition-all"><Menu size={20}/></button>
+                <div className="hidden xl:flex items-center gap-3">
+                  <Shield size={18} className="text-blue-500"/>
+                  <span className="text-[11px] font-black text-slate-500 uppercase tracking-widest leading-none">CPC Nysem Montalbán | Asesoría & Capacitación</span>
                 </div>
             </div>
             
-            <div className="flex items-center gap-8">
-               <div className="flex flex-col items-end mr-6 hidden md:flex">
-                  <span className="text-[9px] font-black text-slate-400 uppercase tracking-[0.4em] leading-none mb-1.5">Conectividad Nodo</span>
-                  <span className="text-[10px] font-black text-emerald-500 uppercase flex items-center gap-2 tracking-tighter">
-                    <span className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse shadow-[0_0_10px_rgba(16,185,129,0.5)]"></span> Sincronizado
+            <div className="flex items-center gap-6">
+               <div className="flex flex-col items-end mr-4 hidden md:flex">
+                  <span className="text-[9px] font-black text-slate-400 uppercase tracking-[0.4em] mb-1 leading-none">Conectividad</span>
+                  <span className="text-[10px] font-black text-emerald-500 uppercase flex items-center gap-2">
+                    <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></div> Nodo Activo
                   </span>
                </div>
-               <div className="h-14 w-px bg-slate-100"></div>
-               <div className="flex items-center gap-4 bg-white px-8 py-4 rounded-[1.5rem] border border-slate-100 font-mono text-[12px] font-black text-slate-700 shadow-sm">
-                  <Calendar size={16} className="text-blue-500"/> {String(getTodayISO())}
+               <div className="h-12 w-px bg-slate-100"></div>
+               <div className="flex items-center gap-4 bg-slate-50 px-6 py-3 rounded-2xl border border-slate-100 font-mono text-[12px] font-black text-slate-700 shadow-inner">
+                  <Calendar size={16} className="text-blue-600"/> {String(getTodayISO())}
                </div>
             </div>
           </header>
 
-          <div className="flex-1 overflow-y-auto p-10 lg:p-16 custom-scrollbar space-y-16 relative">
+          <div className="flex-1 overflow-y-auto p-12 lg:p-16 custom-scrollbar">
             
-            {/* VISTA DASHBOARD REIMAGINADA */}
+            {/* DASHBOARD */}
             {viewMode === 'dashboard' && (
-                <div className="space-y-16 animate-in fade-in slide-in-from-bottom-12 duration-1000">
-                    <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-10">
-                        <div className="space-y-3">
-                           <h2 className="text-5xl font-black text-slate-900 tracking-tighter leading-none uppercase">Visión Ejecutiva</h2>
-                           <p className="text-sm font-bold text-slate-400 tracking-tight italic flex items-center gap-2">
-                             <Shield size={14} className="text-blue-500"/> Centro de Inteligencia Nysem Montalbán EIRL
-                           </p>
-                        </div>
-                        <div className="flex gap-4">
-                           <button onClick={() => setViewMode('clients')} className="bg-slate-900 text-white px-10 py-5 rounded-[2rem] text-[11px] font-black uppercase tracking-[0.3em] hover:bg-blue-600 transition-all shadow-2xl active:scale-95 flex items-center gap-4">
-                             <Plus size={18}/> Apertura de Nodo
-                           </button>
-                        </div>
+                <div className="space-y-16 animate-in fade-in duration-700">
+                    <div className="space-y-4">
+                       <h2 className="text-5xl font-black text-slate-900 tracking-tighter leading-none uppercase italic">Panel de <br/>Control Maestro</h2>
+                       <p className="text-sm font-bold text-slate-400 tracking-tight flex items-center gap-3">
+                         <div className="w-10 h-[1px] bg-blue-600"></div> Consola Administrativa Nysem Montalbán EIRL
+                       </p>
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-10">
                         {[
-                          { title: "Empresas en Gestión", val: clients.length, icon: Building2, color: "blue", label: "Cartera Total" },
-                          { title: "Alertas Críticas", val: clients.filter(c => calculateTaxRisk(c.ruc, c.taxStatus).color === 'rose').length, icon: AlertTriangle, color: "rose", label: "Vencimientos SUNAT" },
-                          { title: "Declaraciones OK", val: clients.filter(c => c.taxStatus === 'declared').length, icon: CheckCircle2, color: "emerald", label: "Ciclo Actual" },
-                          { title: "Staff Nysem", val: users.length, icon: Users, color: "indigo", label: "Células Operativas" }
+                          { title: "Empresas", val: clients.length, icon: Building2, color: "blue" },
+                          { title: "Vencimientos", val: clients.filter(c => calculateTaxRisk(c.ruc, c.taxStatus).color === 'rose').length, icon: AlertTriangle, color: "rose" },
+                          { title: "Staff Firma", val: users.length, icon: Users, color: "indigo" },
+                          { title: "Producción", val: reports.filter(r => r.date === getTodayISO()).length, icon: TrendingUp, color: "emerald" }
                         ].map((stat, i) => (
-                          <div key={i} className="bg-white p-12 rounded-[4rem] border border-slate-100 shadow-[0_30px_60px_-15px_rgba(0,0,0,0.04)] hover:shadow-[0_50px_100px_-20px_rgba(0,0,0,0.08)] transition-all group relative overflow-hidden">
-                              <div className={`w-20 h-20 rounded-[1.8rem] bg-${stat.color}-50 flex items-center justify-center text-${stat.color}-600 mb-8 group-hover:scale-110 transition-transform duration-700 shadow-inner`}>
-                                <stat.icon size={32}/>
+                          <div key={i} className="bg-white p-12 rounded-[4rem] border border-slate-50 shadow-sm hover:shadow-2xl transition-all group relative overflow-hidden">
+                              <div className={`w-16 h-16 rounded-2xl bg-${stat.color}-50 flex items-center justify-center text-${stat.color}-600 mb-8 group-hover:scale-110 transition-transform`}>
+                                <stat.icon size={28}/>
                               </div>
-                              <div className="space-y-1">
-                                <h3 className="text-slate-400 text-[10px] font-black uppercase tracking-[0.3em] mb-1 leading-none">{stat.title}</h3>
-                                <div className="text-6xl font-black text-slate-900 tracking-tighter leading-none">{stat.val}</div>
-                                <p className="text-[9px] font-black text-slate-300 uppercase mt-4 tracking-widest">{stat.label}</p>
-                              </div>
-                              <div className={`absolute -right-8 -bottom-8 opacity-[0.03] group-hover:opacity-[0.08] transition-opacity duration-700 text-${stat.color}-600`}>
-                                <stat.icon size={180}/>
-                              </div>
+                              <h3 className="text-slate-400 text-[10px] font-black uppercase tracking-[0.2em] mb-1">{stat.title}</h3>
+                              <div className="text-6xl font-black text-slate-900 tracking-tighter leading-none">{stat.val}</div>
+                              <div className={`absolute -right-6 -bottom-6 opacity-[0.03] text-${stat.color}-600`}><stat.icon size={150}/></div>
                           </div>
                         ))}
-                    </div>
-
-                    <div className="grid grid-cols-1 xl:grid-cols-2 gap-12">
-                        {/* Actividad Reciente Estilo Terminal Financiera */}
-                        <div className="bg-white p-14 rounded-[5rem] border border-slate-100 shadow-sm relative overflow-hidden">
-                            <div className="flex justify-between items-start mb-14">
-                               <h3 className="text-2xl font-black text-slate-900 flex items-center gap-5 uppercase tracking-tighter leading-none">
-                                  <History className="text-blue-500" size={32}/> Registro Operativo
-                               </h3>
-                               <button className="text-[9px] font-black text-blue-500 uppercase tracking-widest border border-blue-100 px-4 py-2 rounded-full hover:bg-blue-50 transition-all">Ver Historial Completo</button>
-                            </div>
-                            <div className="space-y-8 relative border-l-2 border-slate-100 ml-5 pb-6">
-                                {reports.length > 0 ? reports.slice(0, 4).map((r, i) => (
-                                    <div key={r.id} className="relative pl-12 animate-in slide-in-from-left-8" style={{ animationDelay: `${i * 150}ms` }}>
-                                        <div className="absolute -left-[11px] top-1 w-5 h-5 rounded-full bg-blue-600 border-[5px] border-white shadow-lg ring-8 ring-blue-50 transition-transform hover:scale-125"></div>
-                                        <div className="bg-slate-50/50 p-8 rounded-[3rem] border border-slate-100 flex flex-col md:flex-row md:justify-between md:items-center gap-6 group hover:bg-white hover:shadow-2xl hover:border-blue-200 transition-all duration-500">
-                                            <div className="space-y-2">
-                                                <div className="flex items-center gap-4">
-                                                   <span className="text-[10px] font-black text-blue-600 uppercase tracking-[0.3em] bg-blue-50 px-4 py-2 rounded-full border border-blue-100 leading-none">{r.clientName}</span>
-                                                   <span className="text-[9px] font-black text-slate-300 uppercase tracking-widest leading-none italic">{r.time}</span>
-                                                </div>
-                                                <p className="text-[15px] font-bold text-slate-700 leading-relaxed group-hover:text-slate-900 transition-colors">"{r.description}"</p>
-                                                <div className="flex items-center gap-3 pt-4">
-                                                   <div className="w-8 h-8 rounded-xl bg-slate-200 flex items-center justify-center text-slate-500 font-bold text-[10px] uppercase shadow-inner group-hover:bg-blue-600 group-hover:text-white transition-all">{r.userName?.charAt(0)}</div>
-                                                   <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Responsable: {r.userName}</span>
-                                                </div>
-                                            </div>
-                                            <ChevronRight className="text-slate-200 group-hover:text-blue-500 transition-colors hidden md:block" size={24}/>
-                                        </div>
-                                    </div>
-                                )) : (
-                                  <div className="py-24 text-center">
-                                    <Layers className="mx-auto mb-6 text-slate-200 animate-bounce" size={48}/>
-                                    <p className="text-[11px] font-black text-slate-300 uppercase tracking-[0.4em] italic">Inicie la Bitácora de Producción</p>
-                                  </div>
-                                )}
-                            </div>
-                        </div>
-
-                        {/* Sectores Estratégicos */}
-                        <div className="bg-slate-900 p-16 rounded-[5rem] shadow-[0_50px_100px_-20px_rgba(15,23,42,0.3)] relative overflow-hidden text-white flex flex-col justify-between">
-                            <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-blue-600/10 rounded-full blur-[120px] -mr-64 -mt-64"></div>
-                            <div className="relative z-10">
-                               <div className="flex justify-between items-start mb-16">
-                                  <h3 className="text-2xl font-black flex items-center gap-5 uppercase tracking-tighter leading-none">
-                                     <Briefcase className="text-blue-400" size={32}/> Sectores de Asesoría
-                                  </h3>
-                                  <Shield className="text-blue-500/20" size={40}/>
-                               </div>
-                               <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                                  {['Agricultura', 'Construcción', 'Exportación', 'Servicios Globales', 'Comercio Mayor', 'Capacitación'].map((sector, i) => (
-                                    <div key={i} className="p-7 bg-white/5 border border-white/10 rounded-[2rem] flex items-center gap-6 group hover:bg-blue-600 hover:border-blue-500 transition-all duration-500 cursor-pointer shadow-lg">
-                                       <div className="w-12 h-12 rounded-2xl bg-blue-600/20 flex items-center justify-center text-blue-400 group-hover:bg-white group-hover:text-blue-600 transition-all shadow-inner"><CheckCircle2 size={20}/></div>
-                                       <span className="text-[11px] font-black uppercase tracking-[0.2em] group-hover:translate-x-2 transition-transform">{sector}</span>
-                                    </div>
-                                  ))}
-                               </div>
-                            </div>
-                            <div className="mt-20 pt-10 border-t border-white/5 text-center relative z-10">
-                               <p className="text-[10px] font-black text-slate-500 uppercase tracking-[0.6em] mb-2 leading-none">Nysem Montalbán EIRL</p>
-                               <p className="text-[8px] font-black text-slate-600 uppercase tracking-widest italic">Protocolo de Asesoría & Gestión Integral Perú 2026</p>
-                            </div>
-                        </div>
                     </div>
                 </div>
             )}
 
-            {/* VISTA CARTERA DE CLIENTES - REDISEÑO TOTAL */}
-            {viewMode === 'clients' && (
-                <div className="max-w-7xl mx-auto space-y-16 animate-in fade-in zoom-in-95 duration-1000 pb-32">
-                    <div className="bg-white p-14 rounded-[5rem] border border-slate-100 shadow-2xl relative overflow-hidden group">
-                        <div className="absolute top-0 right-0 w-[400px] h-[400px] bg-blue-600/5 rounded-full blur-[100px] -mr-48 -mt-48 transition-all group-hover:bg-blue-600/10"></div>
-                        <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-12 relative z-10">
-                           <div className="space-y-4">
-                              <h2 className="text-5xl font-black text-slate-900 tracking-tighter uppercase leading-none">Alta Corporativa</h2>
-                              <p className="text-[11px] font-black text-slate-400 uppercase tracking-[0.4em] flex items-center gap-3">
-                                <div className="w-1.5 h-1.5 rounded-full bg-blue-500"></div> Gestión de Nuevas Entidades en Cartera
-                              </p>
+            {/* GESTIÓN DE STAFF (NUEVO MODULO) */}
+            {viewMode === 'users' && isAdmin && (
+                <div className="max-w-7xl mx-auto space-y-16 animate-in fade-in zoom-in-95 duration-700 pb-32">
+                    <div className="bg-white p-14 rounded-[5rem] border border-slate-50 shadow-2xl relative overflow-hidden">
+                        <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-10">
+                           <div className="space-y-3">
+                              <h2 className="text-5xl font-black text-slate-900 tracking-tighter uppercase leading-none">Gestión de Staff</h2>
+                              <p className="text-xs font-bold text-slate-400 uppercase tracking-widest flex items-center gap-3 italic">Control de Asistentes y Auditores de Firma</p>
                            </div>
-                           <div className="w-full xl:w-fit grid grid-cols-2 gap-6">
-                              <div className="bg-slate-50 p-8 rounded-[2.5rem] border border-slate-100 flex flex-col items-center justify-center shadow-inner group/stat hover:bg-white transition-all">
-                                 <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-2 leading-none">Status Nodo</span>
-                                 <span className="text-3xl font-black text-emerald-500 uppercase tracking-tighter group-hover/stat:scale-110 transition-transform">Online</span>
-                              </div>
-                              <div className="bg-slate-900 p-8 rounded-[2.5rem] flex flex-col items-center justify-center shadow-2xl hover:bg-blue-600 transition-all group/stat">
-                                 <span className="text-[9px] font-black text-white/50 uppercase tracking-widest mb-2 leading-none">Total Nodo</span>
-                                 <span className="text-3xl font-black text-white group-hover/stat:scale-110 transition-transform">{clients.length}</span>
-                              </div>
+                           <div className="bg-slate-900 p-8 rounded-[2.5rem] flex flex-col items-center justify-center text-white">
+                               <span className="text-3xl font-black leading-none">{users.length}</span>
+                               <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest mt-2 leading-none">Colaboradores</span>
                            </div>
                         </div>
                         
-                        <div className="mt-20 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-10">
-                            <div className="space-y-4 lg:col-span-2">
-                                <label className="text-[10px] font-black text-slate-400 ml-8 uppercase tracking-widest">Razón Social o Denominación</label>
-                                <input type="text" placeholder="Ej: Consorcio Agrícola Montalbán S.A.C." value={clientForm.name} onChange={e => setClientForm({...clientForm, name: e.target.value})} className="w-full p-7 bg-slate-50 rounded-[2.5rem] border border-transparent font-bold text-slate-800 shadow-inner focus:ring-8 ring-blue-500/5 focus:bg-white focus:border-blue-500/10 transition-all outline-none placeholder:text-slate-200 placeholder:font-black uppercase tracking-tight"/>
+                        <div className="mt-20 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
+                            <div className="space-y-3 lg:col-span-1">
+                                <label className="text-[10px] font-black text-slate-400 ml-6 uppercase tracking-widest">Nombre Completo</label>
+                                <input type="text" placeholder="Ej: Juan Pérez" value={userForm.name} onChange={e => setUserForm({...userForm, name: e.target.value})} className="w-full p-6 bg-slate-50 rounded-[2.2rem] border-none font-bold text-slate-700 shadow-inner outline-none focus:bg-white transition-all"/>
                             </div>
-                            <div className="space-y-4">
-                                <label className="text-[10px] font-black text-slate-400 ml-8 uppercase tracking-widest">Nro. de Registro RUC</label>
-                                <input type="text" placeholder="11 Dígitos" value={clientForm.ruc} onChange={e => setClientForm({...clientForm, ruc: e.target.value})} className="w-full p-7 bg-slate-50 rounded-[2.5rem] border border-transparent font-black text-slate-800 shadow-inner focus:ring-8 ring-blue-500/5 focus:bg-white focus:border-blue-500/10 transition-all outline-none text-center font-mono placeholder:font-sans"/>
+                            <div className="space-y-3">
+                                <label className="text-[10px] font-black text-slate-400 ml-6 uppercase tracking-widest">Usuario (Login)</label>
+                                <input type="text" placeholder="jperez" value={userForm.username} onChange={e => setUserForm({...userForm, username: e.target.value})} className="w-full p-6 bg-slate-50 rounded-[2.2rem] border-none font-bold text-slate-700 shadow-inner outline-none focus:bg-white transition-all"/>
                             </div>
-                            <div className="space-y-4">
-                                <label className="text-[10px] font-black text-slate-400 ml-8 uppercase tracking-widest">Rubro Estratégico</label>
-                                <select value={clientForm.sector} onChange={e => setClientForm({...clientForm, sector: e.target.value})} className="w-full p-7 bg-slate-50 rounded-[2.5rem] border border-transparent font-black text-slate-800 shadow-inner focus:ring-8 ring-blue-500/5 focus:bg-white transition-all outline-none text-[11px] uppercase tracking-[0.2em] cursor-pointer appearance-none text-center">
+                            <div className="space-y-3">
+                                <label className="text-[10px] font-black text-slate-400 ml-6 uppercase tracking-widest">Contraseña Inicial</label>
+                                <input type="text" placeholder="****" value={userForm.password} onChange={e => setUserForm({...userForm, password: e.target.value})} className="w-full p-6 bg-slate-50 rounded-[2.2rem] border-none font-bold text-slate-700 shadow-inner outline-none focus:bg-white transition-all"/>
+                            </div>
+                            <div className="space-y-3">
+                                <label className="text-[10px] font-black text-slate-400 ml-6 uppercase tracking-widest">Rango de Acceso</label>
+                                <select value={userForm.role} onChange={e => setUserForm({...userForm, role: e.target.value})} className="w-full p-6 bg-slate-50 rounded-[2.2rem] border-none font-black text-slate-700 shadow-inner outline-none appearance-none cursor-pointer text-center">
+                                    <option value="Auditor">Auditor (Staff)</option>
+                                    <option value="Administrador">Administrador (CPC)</option>
+                                </select>
+                            </div>
+                        </div>
+                        <button onClick={handleAddUser} className="mt-12 w-full bg-slate-900 text-white py-10 rounded-[3rem] font-black text-[12px] uppercase tracking-[0.5em] shadow-2xl hover:bg-blue-600 transition-all group flex items-center justify-center gap-4">
+                           <UserPlus size={20}/> Integrar Colaborador al Nodo
+                        </button>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-12">
+                        {users.map((u, i) => (
+                            <div key={u.id} className="bg-white p-12 rounded-[4.5rem] border border-slate-50 flex flex-col justify-between items-start group shadow-sm hover:shadow-2xl transition-all duration-700 animate-in slide-in-from-bottom-12">
+                                <div className="w-full">
+                                    <div className="flex justify-between items-start mb-10">
+                                        <div className="w-20 h-20 bg-slate-50 rounded-[2rem] flex items-center justify-center text-slate-800 shadow-inner group-hover:bg-blue-600 group-hover:text-white transition-all duration-500"><UserCog size={36}/></div>
+                                        <div className={`px-5 py-2 rounded-full text-[9px] font-black uppercase tracking-widest border-2 ${u.role === 'Administrador' ? 'bg-indigo-50 text-indigo-600 border-indigo-100' : 'bg-slate-50 text-slate-400 border-slate-100'}`}>{u.role}</div>
+                                    </div>
+                                    <h3 className="font-black text-slate-900 uppercase text-2xl leading-tight mb-2 truncate w-full tracking-tighter">{u.name}</h3>
+                                    <div className="flex items-center gap-3 pt-2">
+                                       <span className="text-[12px] font-black text-slate-300 font-mono tracking-widest">USER: {u.username}</span>
+                                       <span className="w-1.5 h-1.5 rounded-full bg-slate-100"></span>
+                                       <span className="text-[10px] font-black text-blue-400 uppercase tracking-widest">Activo</span>
+                                    </div>
+                                </div>
+                                <div className="w-full flex justify-end mt-12 pt-10 border-t border-slate-50">
+                                    <button onClick={() => deleteDocGeneric('users', u.id)} className="text-slate-100 hover:text-rose-500 transition-colors p-5 hover:bg-rose-50 rounded-[1.5rem] duration-500"><Trash2 size={26}/></button>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            )}
+
+            {/* CARTERA CLIENTES */}
+            {viewMode === 'clients' && (
+                <div className="max-w-7xl mx-auto space-y-16 animate-in fade-in zoom-in-95 duration-700 pb-32">
+                    <div className="bg-white p-14 rounded-[5rem] border border-slate-50 shadow-2xl relative overflow-hidden group">
+                        <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-10">
+                           <div className="space-y-3">
+                              <h2 className="text-5xl font-black text-slate-900 tracking-tighter uppercase leading-none">Cartera Corporativa</h2>
+                              <p className="text-xs font-bold text-slate-400 uppercase tracking-widest flex items-center gap-3 italic">Registro de Entidades bajo Supervisión</p>
+                           </div>
+                           <div className="bg-blue-600 p-8 rounded-[2.5rem] flex flex-col items-center justify-center shadow-lg shadow-blue-500/20 text-white">
+                                 <span className="text-3xl font-black leading-none">{clients.length}</span>
+                                 <span className="text-[9px] font-black text-white/50 uppercase tracking-widest mt-2 leading-none">Entidades Totales</span>
+                           </div>
+                        </div>
+                        
+                        <div className="mt-20 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
+                            <div className="space-y-3 lg:col-span-2">
+                                <label className="text-[10px] font-black text-slate-400 ml-6 uppercase tracking-widest">Razón Social</label>
+                                <input type="text" placeholder="Ej: Consorcio Agrícola S.A.C." value={clientForm.name} onChange={e => setClientForm({...clientForm, name: e.target.value})} className="w-full p-7 bg-slate-50 rounded-[2.2rem] border-none font-bold text-slate-700 shadow-inner outline-none uppercase tracking-tight"/>
+                            </div>
+                            <div className="space-y-3">
+                                <label className="text-[10px] font-black text-slate-400 ml-6 uppercase tracking-widest">RUC</label>
+                                <input type="text" placeholder="11 Dígitos" value={clientForm.ruc} onChange={e => setClientForm({...clientForm, ruc: e.target.value})} className="w-full p-7 bg-slate-50 rounded-[2.2rem] border-none font-black text-slate-700 shadow-inner outline-none text-center font-mono"/>
+                            </div>
+                            <div className="space-y-3">
+                                <label className="text-[10px] font-black text-slate-400 ml-6 uppercase tracking-widest">Rubro Estratégico</label>
+                                <select value={clientForm.sector} onChange={e => setClientForm({...clientForm, sector: e.target.value})} className="w-full p-7 bg-slate-50 rounded-[2.2rem] border-none font-black text-slate-700 shadow-inner outline-none text-[11px] uppercase tracking-[0.2em] cursor-pointer text-center appearance-none">
                                     <option value="Agricultura">Agricultura</option>
                                     <option value="Construcción">Construcción</option>
                                     <option value="Exportación">Exportación</option>
@@ -455,10 +424,8 @@ export default function App() {
                                 </select>
                             </div>
                         </div>
-                        <button onClick={handleAddClient} className="mt-16 w-full bg-slate-900 text-white py-10 rounded-[3.5rem] font-black text-[12px] uppercase tracking-[0.6em] shadow-[0_30px_60px_-15px_rgba(15,23,42,0.4)] hover:bg-blue-600 hover:shadow-[0_40px_80px_-20px_rgba(37,99,235,0.4)] transition-all active:scale-95 group">
-                           <span className="flex items-center justify-center gap-6">
-                              <Layers size={22} className="group-hover:rotate-12 transition-transform"/> Integrar Entidad al Nodo Nysem
-                           </span>
+                        <button onClick={handleAddClient} className="mt-12 w-full bg-slate-900 text-white py-10 rounded-[3rem] font-black text-[12px] uppercase tracking-[0.5em] shadow-2xl hover:bg-blue-600 transition-all active:scale-95 group flex items-center justify-center gap-4">
+                           <BadgeCheck size={20}/> Integrar Cliente al Nodo
                         </button>
                     </div>
 
@@ -467,33 +434,26 @@ export default function App() {
                             const risk = calculateTaxRisk(c.ruc, c.taxStatus);
                             const isDeclared = c.taxStatus === 'declared';
                             return (
-                                <div key={c.id} className="bg-white p-14 rounded-[4.5rem] border border-slate-100 flex flex-col justify-between items-start group shadow-sm hover:shadow-[0_40px_100px_-20px_rgba(0,0,0,0.1)] transition-all duration-700 relative overflow-hidden animate-in slide-in-from-bottom-12 duration-1000" style={{ animationDelay: `${i * 100}ms` }}>
+                                <div key={c.id} className="bg-white p-14 rounded-[4.5rem] border border-slate-50 flex flex-col justify-between items-start group shadow-sm hover:shadow-2xl transition-all relative overflow-hidden">
                                     <div className="w-full">
                                         <div className="flex justify-between items-start mb-12">
-                                            <div className="w-20 h-20 bg-slate-50 rounded-[2rem] flex items-center justify-center text-slate-900 shadow-inner group-hover:bg-slate-900 group-hover:text-white transition-all duration-700"><Building2 size={36}/></div>
-                                            <div className={`px-6 py-2.5 rounded-full text-[10px] font-black uppercase tracking-[0.2em] border-2 transition-all duration-500 ${risk.color === 'rose' ? 'bg-rose-50 text-rose-600 border-rose-100 animate-pulse' : (isDeclared ? 'bg-emerald-50 text-emerald-600 border-emerald-100 shadow-[0_0_15px_rgba(16,185,129,0.2)]':'bg-blue-50 text-blue-600 border-blue-100')}`}>{risk.text}</div>
+                                            <div className="w-20 h-20 bg-slate-50 rounded-[2rem] flex items-center justify-center text-slate-800 shadow-inner group-hover:bg-blue-600 group-hover:text-white transition-all"><Building2 size={36}/></div>
+                                            <div className={`px-6 py-2.5 rounded-full text-[9px] font-black uppercase tracking-[0.2em] border-2 ${risk.bg} ${risk.text} ${risk.color === 'rose' ? 'animate-pulse' : ''}`}>{risk.label}</div>
                                         </div>
-                                        <div className="space-y-3">
-                                           <h3 className="font-black text-slate-900 uppercase text-2xl leading-[1.1] tracking-tighter group-hover:text-blue-600 transition-colors duration-500">{String(c.name)}</h3>
-                                           <div className="flex flex-wrap items-center gap-4 pt-2">
-                                              <span className="text-[12px] font-black text-slate-400 font-mono tracking-widest leading-none bg-slate-50 px-4 py-2 rounded-xl">RUC {String(c.ruc)}</span>
-                                              <span className="text-[10px] font-black text-blue-500 uppercase tracking-widest leading-none flex items-center gap-2">
-                                                 <div className="w-1.5 h-1.5 rounded-full bg-blue-500"></div> {String(c.sector)}
-                                              </span>
-                                           </div>
+                                        <h3 className="font-black text-slate-900 uppercase text-2xl leading-[1.1] tracking-tighter truncate w-full">{String(c.name)}</h3>
+                                        <div className="flex items-center gap-3 pt-4">
+                                              <span className="text-[12px] font-black text-slate-300 font-mono tracking-widest">RUC {String(c.ruc)}</span>
+                                              <span className="w-1.5 h-1.5 rounded-full bg-slate-100"></span>
+                                              <span className="text-[10px] font-black text-blue-400 uppercase tracking-widest">{String(c.sector)}</span>
                                         </div>
                                     </div>
-                                    
-                                    <div className="w-full flex justify-between items-center mt-14 pt-12 border-t border-slate-50">
+                                    <div className="w-full flex justify-between items-center mt-12 pt-12 border-t border-slate-50">
                                         <div className="flex items-center gap-4">
-                                           <button onClick={() => markAsDeclared(c.id)} className={`p-5 rounded-[1.5rem] transition-all duration-500 shadow-2xl active:scale-90 ${isDeclared ? 'bg-emerald-500 text-white shadow-emerald-200' : 'bg-slate-100 text-slate-400 hover:bg-emerald-100 hover:text-emerald-600 hover:shadow-emerald-100'}`}>
+                                           <button onClick={() => markAsDeclared(c.id)} className={`p-5 rounded-[1.5rem] transition-all shadow-2xl ${isDeclared ? 'bg-emerald-500 text-white shadow-emerald-200' : 'bg-slate-50 text-slate-400 hover:bg-emerald-100 hover:text-emerald-600'}`}>
                                               <CheckCircle2 size={26}/>
                                            </button>
-                                           <button className="p-5 rounded-[1.5rem] bg-slate-50 text-slate-400 hover:bg-blue-600 hover:text-white hover:shadow-2xl hover:shadow-blue-200 transition-all duration-500 border border-slate-100">
-                                              <FolderOpen size={26}/>
-                                           </button>
                                         </div>
-                                        <button onClick={() => { if(window.confirm("¿Confirmar eliminación permanente?")) deleteDoc(doc(db, 'artifacts', 'nysem_app', 'public', 'data', 'clients', c.id)) }} className="text-slate-100 hover:text-rose-600 transition-colors p-5 hover:bg-rose-50 rounded-[1.5rem] duration-500"><Trash2 size={26}/></button>
+                                        <button onClick={() => deleteDocGeneric('clients', c.id)} className="text-slate-100 hover:text-rose-600 transition-colors p-5 hover:bg-rose-50 rounded-[1.5rem] duration-500"><Trash2 size={26}/></button>
                                     </div>
                                 </div>
                             );
@@ -502,33 +462,21 @@ export default function App() {
                 </div>
             )}
 
-            {/* VISTA BITÁCORA - REDISEÑADA ESTILO AUDITORÍA */}
+            {/* BITÁCORA */}
             {viewMode === 'reports' && (
-                <div className="max-w-7xl mx-auto grid grid-cols-1 xl:grid-cols-3 gap-16 animate-in fade-in duration-1000 pb-32">
-                    <div className="bg-white p-14 rounded-[5rem] border border-slate-100 shadow-sm h-fit sticky top-12">
+                <div className="max-w-7xl mx-auto grid grid-cols-1 xl:grid-cols-3 gap-16 animate-in fade-in duration-700 pb-32">
+                    <div className="bg-white p-14 rounded-[5rem] border border-slate-50 shadow-sm h-fit sticky top-12">
                         <div className="flex items-center gap-6 mb-16">
                            <div className="p-5 bg-emerald-50 rounded-[1.8rem] text-emerald-600 shadow-inner"><Timer size={36}/></div>
-                           <div className="space-y-1">
-                              <h2 className="text-2xl font-black text-slate-900 uppercase tracking-tighter leading-none">Registro de <br/>Actividades</h2>
-                              <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Staff Nysem Montalbán</p>
-                           </div>
+                           <h2 className="text-2xl font-black text-slate-900 uppercase tracking-tighter leading-none">Bitácora de <br/>Producción</h2>
                         </div>
                         <div className="space-y-12">
-                            <div className="space-y-4">
-                                <label className="text-[10px] font-black text-slate-400 ml-8 uppercase tracking-widest">Cronometría (Hora)</label>
-                                <input type="time" value={reportForm.time} onChange={e => setReportForm({...reportForm, time: e.target.value})} className="w-full p-6 bg-slate-50 rounded-[1.8rem] border border-transparent font-bold text-slate-800 shadow-inner outline-none focus:bg-white focus:border-emerald-500/20 transition-all"/>
-                            </div>
-                            <div className="space-y-4">
-                                <label className="text-[10px] font-black text-slate-400 ml-8 uppercase tracking-widest">Cliente Auditado</label>
-                                <select value={reportForm.clientName} onChange={e => setReportForm({...reportForm, clientName: e.target.value})} className="w-full p-6 bg-slate-50 rounded-[1.8rem] border border-transparent font-black text-slate-800 shadow-inner outline-none text-[11px] uppercase tracking-[0.2em] cursor-pointer">
-                                    <option value="">Selección de Nodo...</option>
-                                    {clients.map(c => <option key={c.id} value={c.name}>{String(c.name)}</option>)}
-                                </select>
-                            </div>
-                            <div className="space-y-4">
-                                <label className="text-[10px] font-black text-slate-400 ml-8 uppercase tracking-widest">Descripción Operativa</label>
-                                <textarea value={reportForm.description} onChange={e => setReportForm({...reportForm, description: e.target.value})} className="w-full p-8 bg-slate-50 rounded-[2.5rem] border border-transparent resize-none h-60 font-medium text-slate-700 shadow-inner text-[15px] leading-relaxed outline-none focus:bg-white focus:border-emerald-500/20 transition-all placeholder:text-slate-200" placeholder="Detalle las labores contables, tributarias o de auditoría realizadas..."></textarea>
-                            </div>
+                            <input type="time" value={reportForm.time} onChange={e => setReportForm({...reportForm, time: e.target.value})} className="w-full p-6 bg-slate-50 rounded-[1.8rem] border-none font-bold text-slate-800 shadow-inner outline-none"/>
+                            <select value={reportForm.clientName} onChange={e => setReportForm({...reportForm, clientName: e.target.value})} className="w-full p-6 bg-slate-50 rounded-[1.8rem] border-none font-black text-slate-800 shadow-inner outline-none text-[11px] uppercase tracking-[0.2em] cursor-pointer appearance-none text-center">
+                                <option value="">Selección de Entidad...</option>
+                                {clients.map(c => <option key={c.id} value={c.name}>{String(c.name)}</option>)}
+                            </select>
+                            <textarea value={reportForm.description} onChange={e => setReportForm({...reportForm, description: e.target.value})} className="w-full p-8 bg-slate-50 rounded-[2.5rem] border-none resize-none h-64 font-medium text-slate-700 shadow-inner text-[15px] leading-relaxed outline-none" placeholder="Reporte el avance contable o tributario realizado..."></textarea>
                             <button onClick={async () => {
                                 if(!reportForm.description || !reportForm.clientName) return;
                                 await addDoc(collection(db, 'artifacts', 'nysem_app', 'public', 'data', 'reports'), { 
@@ -537,35 +485,35 @@ export default function App() {
                                   createdAt: Timestamp.now() 
                                 });
                                 setReportForm({ ...reportForm, description: '', time: '' });
-                            }} className="w-full bg-emerald-600 text-white py-8 rounded-[3rem] font-black text-[12px] uppercase tracking-[0.5em] shadow-[0_30px_60px_-15px_rgba(16,185,129,0.3)] hover:bg-emerald-700 hover:scale-[1.01] transition-all active:scale-95">Archivar Avance</button>
+                            }} className="w-full bg-emerald-600 text-white py-8 rounded-[3rem] font-black text-[12px] uppercase tracking-[0.5em] shadow-2xl hover:bg-emerald-700 transition-all active:scale-95">Grabar Actividad</button>
                         </div>
                     </div>
 
-                    <div className="xl:col-span-2 bg-white p-14 rounded-[6rem] border border-slate-100 shadow-sm min-h-[900px] overflow-hidden">
-                        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b border-slate-50 pb-12 mb-16 gap-8">
+                    <div className="xl:col-span-2 bg-white p-14 rounded-[6rem] border border-slate-50 shadow-sm min-h-[900px]">
+                        <div className="flex justify-between items-center border-b border-slate-50 pb-12 mb-16">
                             <div className="space-y-2">
-                               <h3 className="font-black text-slate-900 text-3xl uppercase tracking-tighter leading-none">Bitácora Global</h3>
-                               <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.4em]">Historial Cronológico de Productividad</p>
+                               <h3 className="font-black text-slate-900 text-3xl uppercase tracking-tighter leading-none">Historial Global</h3>
+                               <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.4em]">Reportes Staff Diarios</p>
                             </div>
-                            <div className="bg-slate-50 px-8 py-4 rounded-full border border-slate-100 text-[11px] font-black text-slate-500 uppercase tracking-widest shadow-inner flex items-center gap-4">
+                            <div className="bg-slate-50 px-8 py-4 rounded-full border border-slate-100 text-[11px] font-black text-slate-500 uppercase tracking-widest shadow-inner flex items-center gap-4 italic">
                                <Clock size={16} className="text-blue-500"/> {String(getTodayISO())}
                             </div>
                         </div>
                         <div className="space-y-12 relative border-l-4 border-slate-50 ml-6 pb-24">
                             {reports.length > 0 ? (
                                 reports.map((r, i) => (
-                                    <div key={r.id} className="relative pl-14 animate-in slide-in-from-left-8" style={{ animationDelay: `${i * 100}ms` }}>
-                                        <div className="absolute -left-[18px] top-1 w-8 h-8 rounded-full bg-emerald-600 border-[6px] border-white shadow-xl ring-12 ring-emerald-50/50 transition-transform hover:scale-125"></div>
-                                        <div className="bg-slate-50/30 p-10 rounded-[4rem] border border-slate-100 flex justify-between items-start hover:bg-white hover:shadow-[0_40px_100px_-20px_rgba(0,0,0,0.06)] hover:border-emerald-200 transition-all duration-700 group relative overflow-hidden">
-                                            <div className="flex-1 relative z-10">
-                                                <div className="flex flex-wrap items-center gap-5 mb-6">
-                                                    <span className="text-[10px] font-black text-emerald-600 uppercase tracking-[0.3em] bg-emerald-100/50 px-5 py-2.5 rounded-full border border-emerald-100 leading-none">{String(r.clientName)}</span>
-                                                    <span className="text-[10px] font-mono font-black text-slate-300 leading-none uppercase tracking-widest bg-white px-4 py-2 rounded-xl border border-slate-50 shadow-sm">{String(r.time)}</span>
+                                    <div key={r.id} className="relative pl-14 animate-in slide-in-from-left-8">
+                                        <div className="absolute -left-[18px] top-1 w-8 h-8 rounded-full bg-emerald-600 border-[6px] border-white shadow-xl ring-12 ring-emerald-50/50"></div>
+                                        <div className="bg-slate-50/50 p-10 rounded-[4rem] border border-slate-100 flex justify-between items-start hover:bg-white hover:shadow-2xl transition-all duration-700 group relative">
+                                            <div className="flex-1">
+                                                <div className="flex items-center gap-5 mb-6">
+                                                    <span className="text-[10px] font-black text-emerald-600 uppercase tracking-[0.3em] bg-emerald-100 px-5 py-2.5 rounded-full border border-emerald-100 leading-none">{String(r.clientName)}</span>
+                                                    <span className="text-[10px] font-mono font-black text-slate-300 tracking-widest bg-white px-4 py-2 rounded-xl border border-slate-50 shadow-sm">{String(r.time)}</span>
                                                 </div>
                                                 <p className="text-[18px] font-bold text-slate-700 leading-relaxed italic group-hover:text-slate-900 transition-colors duration-500">"{String(r.description)}"</p>
-                                                <div className="mt-10 flex items-center gap-5 text-[11px] font-black text-slate-400 uppercase tracking-widest leading-none">
-                                                    <div className="w-10 h-10 rounded-[1.2rem] bg-slate-200 flex items-center justify-center text-slate-600 font-black text-[12px] group-hover:bg-emerald-600 group-hover:text-white transition-all duration-700 shadow-inner">{r.userName?.charAt(0)}</div>
-                                                    Staff Audit: <span className="text-slate-900">{String(r.userName)}</span>
+                                                <div className="mt-10 flex items-center gap-5 text-[11px] font-black text-slate-400 uppercase tracking-widest">
+                                                    <div className="w-10 h-10 rounded-2xl bg-slate-200 flex items-center justify-center text-slate-600 font-black group-hover:bg-emerald-600 group-hover:text-white transition-all shadow-inner">{r.userName?.charAt(0)}</div>
+                                                    Staff Audit: <span className="text-slate-900 ml-1">{String(r.userName)}</span>
                                                 </div>
                                             </div>
                                             <button onClick={async () => { if(window.confirm("¿Eliminar registro?")) await deleteDoc(doc(db, 'artifacts', 'nysem_app', 'public', 'data', 'reports', r.id)) }} className="text-slate-100 hover:text-rose-500 p-4 transition-all duration-500 opacity-0 group-hover:opacity-100 relative z-10"><Trash2 size={24}/></button>
@@ -573,10 +521,7 @@ export default function App() {
                                     </div>
                                 ))
                             ) : (
-                                <div className="py-56 text-center opacity-30">
-                                    <Layers size={80} className="mx-auto mb-8 text-slate-100 animate-pulse"/>
-                                    <p className="text-sm font-black text-slate-300 uppercase tracking-[0.5em] italic">No se registran avances en la base de datos</p>
-                                </div>
+                                <div className="py-56 text-center opacity-30 italic font-black text-slate-300 uppercase text-xs tracking-[0.5em]">Sin actividades hoy</div>
                             )}
                         </div>
                     </div>
@@ -585,13 +530,12 @@ export default function App() {
 
           </div>
           
-          {/* FOOTER CORPORATIVO DISCRETO */}
-          <footer className="h-10 bg-white/50 backdrop-blur-sm border-t border-slate-100 flex items-center px-12 justify-between text-[8px] font-black text-slate-400 uppercase tracking-[0.4em] z-20">
+          <footer className="h-10 bg-white border-t border-slate-100 flex items-center px-12 justify-between text-[8px] font-black text-slate-400 uppercase tracking-[0.4em] z-20">
              <span>Nysem Montalbán EIRL • 2026</span>
              <span className="flex items-center gap-4">
-                <span className="flex items-center gap-1.5"><div className="w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-[0_0_5px_rgba(16,185,129,0.5)]"></div> Cifrado Bancario</span>
+                <span className="flex items-center gap-1.5"><div className="w-1.5 h-1.5 rounded-full bg-emerald-500"></div> Nodo Seguro</span>
                 <span className="text-slate-200">|</span>
-                <span>Auditoría de Sistemas v15.0</span>
+                <span>Audit Console v17.0</span>
              </span>
           </footer>
        </main>
