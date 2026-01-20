@@ -18,12 +18,13 @@ import {
 
 /**
  * NYSEM MONTALBAN EIRL - SISTEMA DE GESTIÓN DE PRODUCCIÓN (SGP)
- * VERSIÓN 13.2.0 - VERCEL CUSTOM ENV NAMES (RECONCILIACIÓN TÉCNICA)
+ * VERSIÓN 13.3.0 - RECONCILIACIÓN FINAL DE VARIABLES VERCEL
  * -----------------------------------------------------------
  */
 
-// --- CONFIGURACIÓN DE SEGURIDAD (AJUSTADA A NOMBRES ESPECÍFICOS DE VERCEL) ---
+// --- CONFIGURACIÓN DE SEGURIDAD (MAPEO EXACTO A SU PANEL DE VERCEL) ---
 const firebaseConfig = {
+  // Mapeo según la lista proporcionada por el colega
   apiKey: process.env.REACTAPPFIREBASEAPIKEY || process.env.VITE_FIREBASE_API_KEY || (typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config).apiKey : ""),
   authDomain: process.env.VITEFIREBASEAUTHDOMAIN || (typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config).authDomain : ""),
   projectId: process.env.VITEFIREBASEPROJECTID || (typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config).projectId : ""),
@@ -32,7 +33,7 @@ const firebaseConfig = {
   appId: process.env.VITEFIREBASEAPPID || (typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config).appId : "")
 };
 
-// Validación de integridad de configuración
+// Validación de integridad de configuración (Se activa si el sistema no lee las variables)
 const isConfigValid = !!firebaseConfig.apiKey && !!firebaseConfig.projectId;
 
 let app, auth, db;
@@ -169,7 +170,7 @@ export default function App() {
     }
   };
 
-  // --- PANTALLA DE DIAGNÓSTICO PROFESIONAL ---
+  // --- PANTALLA DE DIAGNÓSTICO PROFESIONAL (SOLO SI LAS VARIABLES FALLAN) ---
   if (!isConfigValid) {
     return (
       <div className="h-screen flex items-center justify-center bg-[#0F172A] text-white p-10 font-sans">
@@ -179,20 +180,18 @@ export default function App() {
             <h1 className="text-2xl font-black uppercase tracking-tighter">Sintonía de Variables Vercel</h1>
           </div>
           <p className="text-slate-400 text-sm mb-10 leading-relaxed italic">
-            Estimado Colega, la aplicación está detectando sus variables personalizadas. Si ve esta pantalla, verifique que los valores en Vercel correspondan a su proyecto de Firebase.
+            Estimado Colega, la aplicación está detectando sus variables personalizadas. Si ve esta pantalla después de actualizar el código, realice un **Redeploy** en Vercel.
           </p>
-          <div className="bg-black/40 p-8 rounded-[2rem] mb-12 space-y-3 font-mono text-[10px] border border-slate-800 shadow-inner">
-            <p className="text-emerald-500 font-bold tracking-widest uppercase mb-4">Nombres detectados en su panel:</p>
-            <div className="grid grid-cols-1 gap-2 text-slate-500 font-black">
-              <div className="flex justify-between"><span>API KEY:</span> <span>REACTAPPFIREBASEAPIKEY</span></div>
-              <div className="flex justify-between"><span>AUTH DOMAIN:</span> <span>VITEFIREBASEAUTHDOMAIN</span></div>
-              <div className="flex justify-between"><span>PROJECT ID:</span> <span>VITEFIREBASEPROJECTID</span></div>
-              <div className="flex justify-between"><span>STORAGE BUCKET:</span> <span>VITEFIREBASESTORAGEBUCKET</span></div>
-              <div className="flex justify-between"><span>MESSAGING ID:</span> <span>VITEFIREBASEMESSAGINGSENDERID</span></div>
-              <div className="flex justify-between"><span>APP ID:</span> <span>VITEFIREBASEAPPID</span></div>
-            </div>
+          <div className="bg-black/40 p-8 rounded-[2rem] mb-12 space-y-3 font-mono text-[10px] border border-slate-800 shadow-inner text-slate-500 uppercase">
+             <div className="flex justify-between border-b border-slate-800 pb-2 mb-2"><span className="text-blue-400">Variable Esperada</span> <span className="text-blue-400">Origen</span></div>
+             <div className="flex justify-between"><span>REACTAPPFIREBASEAPIKEY</span> <span>API KEY</span></div>
+             <div className="flex justify-between"><span>VITEFIREBASEAUTHDOMAIN</span> <span>AUTH DOMAIN</span></div>
+             <div className="flex justify-between"><span>VITEFIREBASEPROJECTID</span> <span>PROJECT ID</span></div>
+             <div className="flex justify-between"><span>VITEFIREBASESTORAGEBUCKET</span> <span>STORAGE BUCKET</span></div>
+             <div className="flex justify-between"><span>VITEFIREBASEMESSAGINGSENDERID</span> <span>MESSAGING ID</span></div>
+             <div className="flex justify-between"><span>VITEFIREBASEAPPID</span> <span>APP ID</span></div>
           </div>
-          <p className="text-[10px] text-slate-600 uppercase font-black tracking-widest text-center tracking-[0.4em]">Auditoría de Infraestructura v13.2.0</p>
+          <p className="text-[10px] text-slate-600 uppercase font-black tracking-widest text-center tracking-[0.4em]">Auditoría de Infraestructura v13.3.0</p>
         </div>
       </div>
     );
