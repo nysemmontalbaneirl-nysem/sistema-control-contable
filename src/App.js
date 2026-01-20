@@ -19,8 +19,8 @@ import {
 
 /**
  * NYSEM MONTALBAN EIRL - SISTEMA DE GESTIÓN DE PRODUCCIÓN (SGP)
- * VERSIÓN 31.0.0 - EXECUTIVE HORIZONTAL FLOW
- * OBJETIVO: Optimización del Dashboard para alineación horizontal y visualización profesional en Vercel.
+ * VERSIÓN 31.0.1 - DASHBOARD ICON SCALING HOTFIX
+ * OBJETIVO: Reducción del 50% en iconos del dashboard para optimización visual.
  */
 
 const getFirebaseConfig = () => {
@@ -244,7 +244,7 @@ export default function App() {
                          </p>
                       </div>
 
-                      {/* GRID DE ESTADÍSTICAS RE-DISEÑADO PARA HORIZONTALIDAD */}
+                      {/* GRID DE ESTADÍSTICAS REDUCIDO AL 50% */}
                       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
                           {[
                             { title: "CARTERA CLIENTES", val: clients.length, icon: Building2, color: "#0EA5E9", sub: "TOTAL ENTIDADES" },
@@ -252,23 +252,24 @@ export default function App() {
                             { title: "STAFF AUDITOR", val: users.length, icon: Users, color: "#10B981", sub: "EQUIPO ACTIVO" },
                             { title: "REGISTROS HOY", val: reports.filter(r => r.date === getTodayISO()).length, icon: Activity, color: "#6366F1", sub: "AVANCES BITÁCORA" }
                           ].map((stat, i) => (
-                            <div key={i} className="bg-white p-10 rounded-[4rem] shadow-xl border-2 border-slate-50 flex flex-row items-center gap-10 hover:shadow-2xl hover:translate-y-[-8px] transition-all relative overflow-hidden group border-b-[20px]" style={{ borderBottomColor: stat.color }}>
+                            <div key={i} className="bg-white p-6 rounded-[3rem] shadow-xl border-2 border-slate-50 flex flex-row items-center gap-6 hover:shadow-2xl hover:translate-y-[-4px] transition-all relative overflow-hidden group border-b-[10px]" style={{ borderBottomColor: stat.color }}>
                                 
-                                {/* CONTENEDOR ICONO HORIZONTAL */}
-                                <div className="w-28 h-28 shrink-0 rounded-[2.5rem] bg-slate-50 flex items-center justify-center border-2 border-slate-100 shadow-inner group-hover:bg-[#020617] transition-all duration-500 relative z-10">
-                                  <stat.icon size={52} style={{ color: stat.color }} className="group-hover:text-white transition-colors duration-300"/>
+                                {/* CONTENEDOR ICONO REDUCIDO (50% de 28 -> 14) */}
+                                <div className="w-14 h-14 shrink-0 rounded-[1.5rem] bg-slate-50 flex items-center justify-center border-2 border-slate-100 shadow-inner group-hover:bg-[#020617] transition-all duration-500 relative z-10">
+                                  {/* ICONO REDUCIDO (50% de 52 -> 26) */}
+                                  <stat.icon size={26} style={{ color: stat.color }} className="group-hover:text-white transition-colors duration-300"/>
                                 </div>
 
                                 {/* CONTENEDOR DATOS */}
                                 <div className="flex-1 min-w-0 relative z-10">
-                                    <h3 className="text-slate-400 text-[11px] font-black uppercase tracking-[0.4em] mb-3 leading-none truncate">{stat.title}</h3>
-                                    <div className="text-7xl font-black text-[#020617] tracking-tighter leading-none mb-2">{stat.val}</div>
-                                    <p className="text-[9px] font-black text-slate-300 tracking-widest uppercase truncate">{stat.sub}</p>
+                                    <h3 className="text-slate-400 text-[9px] font-black uppercase tracking-[0.2em] mb-1 leading-none truncate">{stat.title}</h3>
+                                    <div className="text-5xl font-black text-[#020617] tracking-tighter leading-none mb-1">{stat.val}</div>
+                                    <p className="text-[8px] font-black text-slate-300 tracking-widest uppercase truncate">{stat.sub}</p>
                                 </div>
 
-                                {/* EFECTO DE FONDO */}
-                                <div className="absolute -right-10 -bottom-10 opacity-[0.03] text-slate-900 group-hover:rotate-12 group-hover:scale-110 transition-transform duration-700">
-                                  <stat.icon size={200}/>
+                                {/* EFECTO DE FONDO REDUCIDO (50% de 200 -> 100) */}
+                                <div className="absolute -right-5 -bottom-5 opacity-[0.03] text-slate-900 group-hover:rotate-12 group-hover:scale-110 transition-transform duration-700">
+                                  <stat.icon size={100}/>
                                 </div>
                             </div>
                           ))}
