@@ -18,18 +18,18 @@ import {
 
 /**
  * NYSEM MONTALBAN EIRL - SISTEMA DE GESTIÓN DE PRODUCCIÓN (SGP)
- * VERSIÓN 13.1.0 - VERCEL CLEAN DEPLOY (NO UNDERSCORES)
+ * VERSIÓN 13.2.0 - VERCEL CUSTOM ENV NAMES (RECONCILIACIÓN TÉCNICA)
  * -----------------------------------------------------------
  */
 
-// --- CONFIGURACIÓN DE SEGURIDAD (VARIABLES PLANAS PARA VERCEL) ---
+// --- CONFIGURACIÓN DE SEGURIDAD (AJUSTADA A NOMBRES ESPECÍFICOS DE VERCEL) ---
 const firebaseConfig = {
-  apiKey: process.env.FIREBASEAPIKEY || (typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config).apiKey : ""),
-  authDomain: process.env.FIREBASEAUTHDOMAIN || (typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config).authDomain : ""),
-  projectId: process.env.FIREBASEPROJECTID || (typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config).projectId : ""),
-  storageBucket: process.env.FIREBASESTORAGEBUCKET || (typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config).storageBucket : ""),
-  messagingSenderId: process.env.FIREBASEMESSAGINGSENDERID || (typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config).messagingSenderId : ""),
-  appId: process.env.FIREBASEAPPID || (typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config).appId : "")
+  apiKey: process.env.REACTAPPFIREBASEAPIKEY || process.env.VITE_FIREBASE_API_KEY || (typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config).apiKey : ""),
+  authDomain: process.env.VITEFIREBASEAUTHDOMAIN || (typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config).authDomain : ""),
+  projectId: process.env.VITEFIREBASEPROJECTID || (typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config).projectId : ""),
+  storageBucket: process.env.VITEFIREBASESTORAGEBUCKET || (typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config).storageBucket : ""),
+  messagingSenderId: process.env.VITEFIREBASEMESSAGINGSENDERID || (typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config).messagingSenderId : ""),
+  appId: process.env.VITEFIREBASEAPPID || (typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config).appId : "")
 };
 
 // Validación de integridad de configuración
@@ -169,30 +169,30 @@ export default function App() {
     }
   };
 
-  // --- PANTALLA DE CONFIGURACIÓN PENDIENTE (DIAGNÓSTICO) ---
+  // --- PANTALLA DE DIAGNÓSTICO PROFESIONAL ---
   if (!isConfigValid) {
     return (
       <div className="h-screen flex items-center justify-center bg-[#0F172A] text-white p-10 font-sans">
         <div className="max-w-2xl w-full bg-slate-900 p-12 rounded-[3.5rem] border border-slate-800 shadow-2xl">
           <div className="flex items-center gap-6 mb-10 text-amber-400">
             <Settings className="animate-spin-slow" size={48} />
-            <h1 className="text-2xl font-black uppercase tracking-tighter">Configuración Web Requerida</h1>
+            <h1 className="text-2xl font-black uppercase tracking-tighter">Sintonía de Variables Vercel</h1>
           </div>
           <p className="text-slate-400 text-sm mb-10 leading-relaxed italic">
-            Estimado Colega, el sistema detectó que las variables de entorno en Vercel no han sido configuradas o tienen nombres incorrectos.
+            Estimado Colega, la aplicación está detectando sus variables personalizadas. Si ve esta pantalla, verifique que los valores en Vercel correspondan a su proyecto de Firebase.
           </p>
           <div className="bg-black/40 p-8 rounded-[2rem] mb-12 space-y-3 font-mono text-[10px] border border-slate-800 shadow-inner">
-            <p className="text-emerald-500 font-bold tracking-widest uppercase mb-4">Nombres exactos para Vercel (SIN GUIONES):</p>
-            <div className="grid grid-cols-2 gap-4 text-slate-500 font-black">
-              <div>FIREBASEAPIKEY</div>
-              <div>FIREBASEAUTHDOMAIN</div>
-              <div>FIREBASEPROJECTID</div>
-              <div>FIREBASESTORAGEBUCKET</div>
-              <div>FIREBASEMESSAGINGSENDERID</div>
-              <div>FIREBASEAPPID</div>
+            <p className="text-emerald-500 font-bold tracking-widest uppercase mb-4">Nombres detectados en su panel:</p>
+            <div className="grid grid-cols-1 gap-2 text-slate-500 font-black">
+              <div className="flex justify-between"><span>API KEY:</span> <span>REACTAPPFIREBASEAPIKEY</span></div>
+              <div className="flex justify-between"><span>AUTH DOMAIN:</span> <span>VITEFIREBASEAUTHDOMAIN</span></div>
+              <div className="flex justify-between"><span>PROJECT ID:</span> <span>VITEFIREBASEPROJECTID</span></div>
+              <div className="flex justify-between"><span>STORAGE BUCKET:</span> <span>VITEFIREBASESTORAGEBUCKET</span></div>
+              <div className="flex justify-between"><span>MESSAGING ID:</span> <span>VITEFIREBASEMESSAGINGSENDERID</span></div>
+              <div className="flex justify-between"><span>APP ID:</span> <span>VITEFIREBASEAPPID</span></div>
             </div>
           </div>
-          <p className="text-[10px] text-slate-600 uppercase font-black tracking-widest text-center tracking-[0.4em]">Auditoría de Despliegue v13.1.0</p>
+          <p className="text-[10px] text-slate-600 uppercase font-black tracking-widest text-center tracking-[0.4em]">Auditoría de Infraestructura v13.2.0</p>
         </div>
       </div>
     );
