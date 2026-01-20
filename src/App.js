@@ -5,7 +5,7 @@ import {
   Plus, Trash2, Calendar, History, Lock, Database, 
   LogOut, Clock, AlertCircle, Edit, X, Save,
   ChevronRight, Briefcase, TrendingUp, UserPlus, UserCog, BadgeCheck,
-  Zap, Globe, Activity, PieChart, Layers
+  Zap, Globe, Activity, PieChart, Layers, Search
 } from 'lucide-react';
 
 // Firebase v11+ Implementation
@@ -20,7 +20,7 @@ import {
 
 /**
  * NYSEM MONTALBAN EIRL - SISTEMA DE GESTIÓN DE PRODUCCIÓN (SGP)
- * VERSIÓN 19.0.0 - ULTRA-SAAS EXECUTIVE EDITION
+ * VERSIÓN 19.1.0 - ULTRA-SAAS EXECUTIVE (FIXED IMPORTS)
  * COLORES: Dark Blue (#020617), Sky Blue (#0EA5E9), Emerald Green (#10B981)
  */
 
@@ -227,7 +227,7 @@ export default function App() {
           </div>
           <div className="text-center">
              <p className="text-[10px] font-black tracking-[0.8em] uppercase text-sky-400">Nysem Montalbán EIRL</p>
-             <p className="text-[12px] text-slate-500 uppercase tracking-widest mt-4 font-mono">Sincronización Cuántica v19.0</p>
+             <p className="text-[12px] text-slate-500 uppercase tracking-widest mt-4 font-mono">Sincronización Cuántica v19.1</p>
           </div>
         </div>
       </div>
