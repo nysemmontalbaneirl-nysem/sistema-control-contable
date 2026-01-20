@@ -6,14 +6,14 @@ import {
   LogOut, Clock, AlertCircle, Edit, X, Save,
   ChevronRight, Briefcase, TrendingUp, UserPlus, UserCog, BadgeCheck,
   Zap, Globe, Activity, PieChart, Layers, Search, Monitor, Cpu,
-  Key, ShieldCheck, Settings
+  Key, ShieldCheck, Settings, Layout
 } from 'lucide-react';
 
 // Firebase v11+ Implementation
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import { 
   getFirestore, collection, doc, onSnapshot, addDoc, 
-  updateDoc, deleteDoc, Timestamp, query, orderBy, getDoc
+  updateDoc, deleteDoc, Timestamp, query, orderBy 
 } from 'firebase/firestore';
 import { 
   getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken
@@ -21,19 +21,36 @@ import {
 
 /**
  * NYSEM MONTALBAN EIRL - SISTEMA DE GESTIÓN DE PRODUCCIÓN (SGP)
- * VERSIÓN 22.0.0 - MASTER GOVERNANCE & PERSISTENCE FIX
- * ENFOQUE: Persistencia Garantizada, Gestión de Roles y Distribución Elite.
+ * VERSIÓN 23.0.0 - TOTAL RECOVERY & ROLES FIX
  */
 
-// Global Config & Sanity Checks
-const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : "{}");
+// 1. ROBUST CONFIGURATION DETECTION
+const getFirebaseConfig = () => {
+  // Try Global Variable (Canvas environment)
+  if (typeof __firebase_config !== 'undefined' && __firebase_config) {
+    try { return JSON.parse(__firebase_config); } catch (e) { console.error("JSON Parse error in __firebase_config"); }
+  }
+  // Try Environment Variables (Vercel/Standard React)
+  return {
+    apiKey: process.env.REACT_APP_FIREBASE_API_KEY || "",
+    authDomain: process.env.REACT_APP_FIREBASE_AUTH_DOMAIN || "",
+    projectId: process.env.REACT_APP_FIREBASE_PROJECT_ID || "",
+    storageBucket: process.env.REACT_APP_FIREBASE_STORAGE_BUCKET || "",
+    messagingSenderId: process.env.REACT_APP_FIREBASE_MESSAGING_SENDER_ID || "",
+    appId: process.env.REACT_APP_FIREBASE_APP_ID || ""
+  };
+};
+
+const firebaseConfig = getFirebaseConfig();
 const appId = typeof __app_id !== 'undefined' ? __app_id : 'nysem-app';
 
 let app, auth, db;
 if (firebaseConfig.apiKey) {
-  app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
-  auth = getAuth(app);
-  db = getFirestore(app);
+  try {
+    app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
+    auth = getAuth(app);
+    db = getFirestore(app);
+  } catch (e) { console.error("Firebase init failed:", e); }
 }
 
 const getTodayISO = () => new Date().toISOString().split('T')[0];
@@ -59,16 +76,18 @@ export default function App() {
   const [userForm, setUserForm] = useState({ name: '', username: '', password: '', role: 'Auditor' });
   const [reportForm, setReportForm] = useState({ time: '', description: '', date: getTodayISO(), clientName: '' });
 
-  // --- NOTIFICATION SYSTEM ---
   const notify = (msg, type = 'success') => {
     setNotification({ msg, type });
     setTimeout(() => setNotification(null), 4000);
   };
 
-  // --- AUTHENTICATION FLOW ---
+  // 2. FIXED AUTH FLOW (Prevents infinite loading)
   useEffect(() => {
     const initAuth = async () => {
-      if (!auth) return;
+      if (!auth) {
+        setIsInitializing(false);
+        return;
+      }
       try {
         if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
           await signInWithCustomToken(auth, __initial_auth_token);
@@ -76,8 +95,7 @@ export default function App() {
           await signInAnonymously(auth);
         }
       } catch (err) {
-        console.error("Auth Error:", err);
-        setAccessError("Error de conexión con el nodo de seguridad.");
+        console.error("Auth process error:", err);
       } finally {
         setIsInitializing(false);
       }
@@ -87,26 +105,26 @@ export default function App() {
     return () => unsubscribe();
   }, []);
 
-  // --- DATA FETCHING ---
+  // 3. PERSISTENT DATA SYNC
   useEffect(() => {
     if (!user || !db) return;
     
-    // Path: /artifacts/{appId}/public/data/{collection}
+    // Path Standard: /artifacts/{appId}/public/data/{collection}
     const usersRef = collection(db, 'artifacts', appId, 'public', 'data', 'users');
     const clientsRef = collection(db, 'artifacts', appId, 'public', 'data', 'clients');
     const reportsRef = collection(db, 'artifacts', appId, 'public', 'data', 'reports');
 
     const unsubUsers = onSnapshot(usersRef, (snap) => {
       setUsers(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-    }, (err) => console.error("Users sync error:", err));
+    }, (err) => console.error("Error sync users:", err));
 
     const unsubClients = onSnapshot(clientsRef, (snap) => {
       setClients(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-    }, (err) => console.error("Clients sync error:", err));
+    }, (err) => console.error("Error sync clients:", err));
 
     const unsubReports = onSnapshot(query(reportsRef, orderBy("createdAt", "desc")), (snap) => {
       setReports(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-    }, (err) => console.error("Reports sync error:", err));
+    }, (err) => console.error("Error sync reports:", err));
 
     return () => {
       unsubUsers();
@@ -115,7 +133,6 @@ export default function App() {
     };
   }, [user]);
 
-  // --- LOGICA DE NEGOCIO ---
   const handleLogin = (e) => {
     if (e) e.preventDefault();
     if (loginForm.username === 'admin' && loginForm.password === 'admin') {
@@ -129,17 +146,10 @@ export default function App() {
       setIsLoggedIn(true);
       setAccessError(null);
     } else {
-      setAccessError("Credenciales no válidas para el entorno Nysem.");
+      setAccessError("Identidad no reconocida.");
     }
   };
 
-  const handleLogout = () => {
-    setIsLoggedIn(false);
-    setCurrentUserData(null);
-    setViewMode('dashboard');
-  };
-
-  // --- PERSISTENCE: CLIENTS ---
   const handleSaveClient = async () => {
     if (!clientForm.name || !clientForm.ruc || !user) return;
     try {
@@ -148,22 +158,16 @@ export default function App() {
         await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'clients', editingId), {
           ...clientForm, updatedAt: Timestamp.now()
         });
-        notify("Entidad actualizada correctamente.");
+        notify("Entidad actualizada.");
       } else {
-        await addDoc(colRef, { 
-          ...clientForm, taxStatus: 'pending', createdAt: Timestamp.now() 
-        });
-        notify("Nueva entidad vinculada al nodo.");
+        await addDoc(colRef, { ...clientForm, taxStatus: 'pending', createdAt: Timestamp.now() });
+        notify("Entidad guardada exitosamente.");
       }
       setClientForm({ name: '', ruc: '', sector: 'Servicios', honorario: '' });
       setEditingId(null);
-    } catch (e) {
-      console.error(e);
-      notify("Error al persistir datos.", "error");
-    }
+    } catch (e) { notify("Error al guardar cliente.", "error"); }
   };
 
-  // --- PERSISTENCE: USERS & ROLES ---
   const handleSaveUser = async () => {
     if (!userForm.name || !userForm.username || !user) return;
     try {
@@ -172,41 +176,29 @@ export default function App() {
         await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'users', editingId), {
           ...userForm, updatedAt: Timestamp.now()
         });
-        notify("Perfil de staff actualizado.");
+        notify("Staff actualizado.");
       } else {
-        await addDoc(colRef, { 
-          ...userForm, createdAt: Timestamp.now() 
-        });
-        notify("Nuevo auditor integrado al equipo.");
+        await addDoc(colRef, { ...userForm, createdAt: Timestamp.now() });
+        notify("Asistente registrado.");
       }
       setUserForm({ name: '', username: '', password: '', role: 'Auditor' });
       setEditingId(null);
-    } catch (e) {
-      console.error(e);
-      notify("Error al registrar staff.", "error");
-    }
+    } catch (e) { notify("Error al guardar staff.", "error"); }
   };
 
   const deleteRecord = async (col, id) => {
-    if (!user) return;
-    if (window.confirm("¿Confirma la eliminación permanente de este registro corporativo?")) {
+    if (window.confirm("¿Eliminar registro de forma permanente?")) {
       try {
         await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', col, id));
-        notify("Registro eliminado del historial.");
-      } catch (e) {
-        console.error(e);
-        notify("Fallo en la eliminación.", "error");
-      }
+        notify("Registro eliminado.");
+      } catch (e) { notify("Error al eliminar.", "error"); }
     }
   };
 
   const markAsDeclared = async (id) => {
-    if (!user) return;
     try {
-      await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'clients', id), { 
-        taxStatus: 'declared' 
-      });
-      notify("Impuestos marcados como DECLARADOS.");
+      await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'clients', id), { taxStatus: 'declared' });
+      notify("Impuesto DECLARADO.");
     } catch (e) { console.error(e); }
   };
 
@@ -220,12 +212,12 @@ export default function App() {
 
   if (isInitializing) {
     return (
-      <div className="h-screen flex items-center justify-center bg-[#020617] text-white font-sans">
+      <div className="h-screen flex items-center justify-center bg-[#020617] text-white">
         <div className="flex flex-col items-center gap-10">
           <RefreshCw className="text-[#0EA5E9] animate-spin" size={80} />
           <div className="text-center">
              <p className="text-[14px] font-black tracking-[1.5em] uppercase text-[#0EA5E9]">NYSEM MONTALBÁN EIRL</p>
-             <p className="text-[18px] text-slate-500 uppercase tracking-widest mt-6 font-mono animate-pulse italic">Validando Nodo Maestro v22.0</p>
+             <p className="text-[18px] text-slate-500 uppercase tracking-widest mt-6 animate-pulse italic">Validando Nodo Maestro v23.0</p>
           </div>
         </div>
       </div>
@@ -234,27 +226,26 @@ export default function App() {
 
   if (!isLoggedIn) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-[#F1F5F9] p-8 font-sans relative">
-        <div className="bg-white w-full max-w-2xl rounded-[5rem] shadow-[0_80px_150px_-30px_rgba(2,6,23,0.2)] overflow-hidden border border-white flex flex-col z-10">
+      <div className="min-h-screen flex items-center justify-center bg-[#F1F5F9] p-8">
+        <div className="bg-white w-full max-w-2xl rounded-[5rem] shadow-2xl overflow-hidden border border-white">
           <div className="bg-[#020617] p-24 text-center text-white relative">
-            <div className="absolute top-0 right-0 w-96 h-96 bg-[#0EA5E9]/10 rounded-full blur-[120px] -mr-48 -mt-48"></div>
-            <Shield className="mx-auto mb-12 text-[#0EA5E9] drop-shadow-[0_0_30px_rgba(14,165,233,0.5)]" size={110}/>
-            <h1 className="text-7xl font-black uppercase tracking-tighter leading-none mb-6">Master Login</h1>
-            <p className="text-[14px] font-black text-slate-500 uppercase tracking-[0.8em] italic">Asesoría & Capacitación Empresarial</p>
+            <Shield className="mx-auto mb-12 text-[#0EA5E9]" size={110}/>
+            <h1 className="text-7xl font-black uppercase tracking-tighter mb-6 leading-none">MASTER LOGIN</h1>
+            <p className="text-[14px] font-black text-slate-500 uppercase tracking-[0.8em]">Asesoría & Capacitación</p>
           </div>
           <div className="p-24 space-y-12 bg-white">
             <form onSubmit={handleLogin} className="space-y-12">
               {accessError && (
                 <div className="p-8 bg-rose-50 border-2 border-rose-100 rounded-[2.5rem] flex items-center gap-6 animate-in fade-in zoom-in">
-                  <AlertCircle className="text-rose-600 shrink-0" size={32}/>
-                  <p className="text-[16px] font-black text-rose-800 uppercase tracking-tight">{accessError}</p>
+                  <AlertCircle className="text-rose-600" size={32}/>
+                  <p className="text-[16px] font-black text-rose-800 uppercase">{accessError}</p>
                 </div>
               )}
               <div className="space-y-8">
-                <input type="text" placeholder="ID DE USUARIO" value={loginForm.username} onChange={e => setLoginForm({...loginForm, username: e.target.value})} className="w-full p-10 bg-slate-50 rounded-[3.5rem] border-2 border-slate-100 font-black text-slate-800 shadow-inner outline-none focus:bg-white focus:border-[#0EA5E9] transition-all text-3xl uppercase tracking-widest placeholder:text-slate-300" required />
-                <input type="password" placeholder="CLAVE DIGITAL" value={loginForm.password} onChange={e => setLoginForm({...loginForm, password: e.target.value})} className="w-full p-10 bg-slate-50 rounded-[3.5rem] border-2 border-slate-100 font-black text-slate-800 shadow-inner outline-none focus:bg-white focus:border-[#0EA5E9] transition-all text-3xl uppercase tracking-widest placeholder:text-slate-300" required />
+                <input type="text" placeholder="ID DE USUARIO" value={loginForm.username} onChange={e => setLoginForm({...loginForm, username: e.target.value})} className="w-full p-10 bg-slate-50 rounded-[3.5rem] border-2 border-slate-100 font-black text-slate-800 shadow-inner outline-none focus:bg-white focus:border-[#0EA5E9] transition-all text-3xl uppercase tracking-widest" required />
+                <input type="password" placeholder="CLAVE DIGITAL" value={loginForm.password} onChange={e => setLoginForm({...loginForm, password: e.target.value})} className="w-full p-10 bg-slate-50 rounded-[3.5rem] border-2 border-slate-100 font-black text-slate-800 shadow-inner outline-none focus:bg-white focus:border-[#0EA5E9] transition-all text-3xl uppercase tracking-widest" required />
               </div>
-              <button type="submit" className="w-full bg-[#020617] text-white py-11 rounded-[4rem] font-black text-[18px] uppercase tracking-[0.8em] hover:bg-[#0EA5E9] transition-all shadow-3xl active:scale-95 mt-10 hover:shadow-[#0EA5E9]/40">Iniciar Consola</button>
+              <button type="submit" className="w-full bg-[#020617] text-white py-11 rounded-[4rem] font-black text-[18px] uppercase tracking-[0.8em] hover:bg-[#0EA5E9] transition-all shadow-3xl">Iniciar Consola</button>
             </form>
           </div>
         </div>
@@ -265,195 +256,121 @@ export default function App() {
   const isAdmin = currentUserData?.role === 'Administrador';
 
   return (
-    <div className="flex min-h-screen bg-[#F8FAFC] font-sans">
-       
-       {/* NOTIFICATION LAYER */}
+    <div className="flex min-h-screen bg-[#F8FAFC]">
        {notification && (
-         <div className={`fixed top-10 right-10 z-[100] p-8 rounded-[2.5rem] shadow-2xl border-4 flex items-center gap-6 animate-in slide-in-from-right-20 duration-500 ${notification.type === 'success' ? 'bg-[#10B981] border-white text-white' : 'bg-rose-600 border-white text-white'}`}>
+         <div className={`fixed top-10 right-10 z-[100] p-8 rounded-[2.5rem] shadow-2xl border-4 flex items-center gap-6 animate-in slide-in-from-right-20 ${notification.type === 'success' ? 'bg-[#10B981] border-white text-white' : 'bg-rose-600 border-white text-white'}`}>
             <BadgeCheck size={36}/>
-            <span className="text-xl font-black uppercase tracking-widest">{notification.msg}</span>
+            <span className="text-xl font-black uppercase">{notification.msg}</span>
          </div>
        )}
 
-       {/* SIDEBAR CORPORATIVO */}
-       <aside className={`${sidebarOpen ? 'w-[450px]' : 'w-36'} bg-[#020617] flex flex-col transition-all duration-700 shadow-[30px_0_80px_rgba(0,0,0,0.3)] z-50 relative border-r border-white/5`}>
+       <aside className={`${sidebarOpen ? 'w-[450px]' : 'w-36'} bg-[#020617] flex flex-col transition-all duration-700 shadow-2xl relative border-r border-white/5 z-50`}>
          <div className="h-48 flex items-center px-16 border-b border-white/5">
-            <div className="bg-[#10B981] p-7 rounded-[2.2rem] shadow-[0_0_40px_rgba(16,185,129,0.6)]">
-              <Database className="text-white" size={48}/>
-            </div>
+            <Database className="text-[#10B981]" size={48}/>
             {sidebarOpen && (
-              <div className="ml-10 animate-in fade-in slide-in-from-left-12">
-                <span className="block font-black text-5xl text-white tracking-tighter uppercase italic leading-none">NYSEM</span>
-                <span className="text-[12px] font-black text-[#0EA5E9] uppercase tracking-[0.8em] mt-5 block opacity-90 leading-none">CORE v22</span>
+              <div className="ml-10">
+                <span className="block font-black text-5xl text-white tracking-tighter uppercase italic">NYSEM</span>
+                <span className="text-[12px] font-black text-[#0EA5E9] uppercase tracking-[0.8em] mt-5 block">CORE v23</span>
               </div>
             )}
          </div>
-
-         <nav className="flex-1 p-14 space-y-7 overflow-y-auto custom-scrollbar">
+         <nav className="flex-1 p-14 space-y-7">
             {[
               { id: 'dashboard', label: 'Dashboard', icon: Home, show: true },
               { id: 'clients', label: 'Cartera Clientes', icon: Building2, show: true },
-              { id: 'reports', label: 'Producción Diaria', icon: Timer, show: true },
-              { id: 'roles', label: 'Seguridad y Roles', icon: ShieldCheck, show: isAdmin },
-              { id: 'staff', label: 'Gestión de Staff', icon: Users, show: isAdmin }
+              { id: 'reports', label: 'Bitácora Staff', icon: Timer, show: true },
+              { id: 'staff', label: 'Gestión Personal', icon: Users, show: isAdmin }
             ].filter(i => i.show).map((item) => (
-              <button key={item.id} onClick={() => { setViewMode(item.id); setEditingId(null); }} className={`w-full flex items-center gap-9 p-8 rounded-[3rem] text-[16px] font-black uppercase tracking-[0.4em] transition-all duration-500 group relative ${viewMode === item.id ? 'bg-[#0EA5E9] text-white shadow-[0_30px_60px_-15px_rgba(14,165,233,0.6)] translate-x-6 border-l-[12px] border-emerald-400' : 'text-slate-500 hover:bg-white/5 hover:text-white'}`}>
-                <item.icon size={36} className={viewMode === item.id ? 'animate-pulse' : 'group-hover:scale-125 transition-transform'}/> 
+              <button key={item.id} onClick={() => { setViewMode(item.id); setEditingId(null); }} className={`w-full flex items-center gap-9 p-8 rounded-[3rem] text-[16px] font-black uppercase tracking-[0.4em] transition-all duration-500 group ${viewMode === item.id ? 'bg-[#0EA5E9] text-white' : 'text-slate-500 hover:text-white'}`}>
+                <item.icon size={36} className={viewMode === item.id ? 'animate-pulse' : ''}/> 
                 {sidebarOpen && item.label}
               </button>
             ))}
          </nav>
-
          <div className="p-14">
-            <div className="bg-white/5 p-9 rounded-[4rem] border border-white/10 flex items-center gap-9 backdrop-blur-3xl group hover:bg-white/10 transition-all duration-500">
-                <div className="w-22 h-22 rounded-[2rem] bg-[#10B981] flex items-center justify-center text-white font-black text-5xl shadow-3xl border border-white/10">
-                  {currentUserData?.name?.charAt(0)}
-                </div>
-                {sidebarOpen && (
-                  <div className="flex-1 overflow-hidden">
-                    <p className="text-[16px] font-black text-white truncate uppercase tracking-tight leading-none mb-4">{currentUserData?.name}</p>
-                    <button onClick={handleLogout} className="text-[12px] font-black text-rose-500 uppercase tracking-[0.5em] hover:text-white transition-colors flex items-center gap-4">
-                       <LogOut size={18}/> Salida Segura
-                    </button>
-                  </div>
-                )}
-            </div>
+            <button onClick={() => setIsLoggedIn(false)} className="w-full flex items-center gap-9 p-8 rounded-[3rem] text-rose-500 font-black uppercase tracking-[0.4em]">
+               <LogOut size={36}/> {sidebarOpen && "SALIR"}
+            </button>
          </div>
        </aside>
 
-       <main className="flex-1 flex flex-col overflow-hidden relative">
-          
-          {/* HEADER PREMIUM */}
-          <header className="h-44 bg-white border-b-8 border-[#F1F5F9] flex items-center px-24 justify-between z-40">
+       <main className="flex-1 flex flex-col overflow-hidden">
+          <header className="h-44 bg-white border-b-8 border-[#F1F5F9] flex items-center px-24 justify-between shadow-sm">
             <div className="flex items-center gap-16">
-                <button onClick={() => setSidebarOpen(!sidebarOpen)} className="p-8 bg-slate-50 hover:bg-[#0EA5E9]/5 rounded-[2.5rem] text-slate-400 hover:text-[#0EA5E9] border-4 border-slate-100 shadow-xl transition-all">
+                <button onClick={() => setSidebarOpen(!sidebarOpen)} className="p-8 bg-slate-50 rounded-[2.5rem] border-4 border-slate-100 text-slate-400">
                   <Menu size={44}/>
                 </button>
-                <div className="hidden lg:flex items-center gap-10 bg-[#020617] px-14 py-8 rounded-[3rem] text-white shadow-2xl">
-                    <Monitor size={32} className="text-[#0EA5E9] animate-pulse"/>
-                    <div className="flex flex-col">
-                        <span className="text-[18px] font-black tracking-tighter uppercase leading-none">Terminal CPC</span>
-                        <span className="text-[11px] font-black text-slate-500 uppercase tracking-[0.6em] mt-2 italic">Persistencia de Datos Activa</span>
-                    </div>
+                <div className="hidden lg:block">
+                    <h2 className="text-4xl font-black text-slate-800 tracking-tighter uppercase">{viewMode}</h2>
+                    <p className="text-sm font-black text-slate-400 tracking-widest uppercase italic">Nysem Montalbán EIRL</p>
                 </div>
             </div>
-            
-            <div className="flex items-center gap-16">
-               <div className="flex flex-col items-end mr-10 hidden xl:flex">
-                  <span className="text-[12px] font-black text-slate-400 uppercase tracking-[0.7em] mb-3 leading-none italic">Sincronización Nysem Cloud</span>
-                  <span className="text-[18px] font-black text-[#10B981] uppercase flex items-center gap-5">
-                    <Zap size={24} fill="currentColor"/> NODO ESTABLE
-                  </span>
-               </div>
-               <div className="h-24 w-[4px] bg-slate-100 rounded-full"></div>
-               <div className="flex items-center gap-10 bg-slate-50 px-16 py-8 rounded-[2.8rem] border-2 border-slate-100 font-mono text-[24px] font-black text-slate-800 shadow-inner group">
-                  <Calendar size={36} className="text-[#0EA5E9]"/> {getTodayISO()}
-               </div>
+            <div className="flex items-center gap-10 bg-slate-50 px-16 py-8 rounded-[2.8rem] border-2 border-slate-100 font-mono text-[24px] font-black text-slate-800 shadow-inner group">
+                <Calendar size={36} className="text-[#0EA5E9]"/> {getTodayISO()}
             </div>
           </header>
 
-          <div className="flex-1 overflow-y-auto p-20 lg:p-28 custom-scrollbar bg-[#F8FAFC]">
+          <div className="flex-1 overflow-y-auto p-20 lg:p-28 bg-[#F8FAFC]">
             
-            {/* DASHBOARD XL */}
             {viewMode === 'dashboard' && (
                 <div className="space-y-28 animate-in fade-in duration-1000">
-                    <div className="flex flex-col lg:flex-row justify-between items-start lg:items-end gap-20 border-l-[15px] border-[#0EA5E9] pl-20">
-                        <div className="space-y-8">
-                           <h2 className="text-[10rem] font-black text-[#020617] tracking-tighter leading-[0.8] uppercase italic drop-shadow-2xl">Gestión <br/>Maestra</h2>
-                           <p className="text-3xl font-bold text-slate-400 tracking-tight flex items-center gap-10 italic">
-                             <div className="w-32 h-3 bg-[#10B981] rounded-full shadow-[0_0_25px_rgba(16,185,129,0.7)]"></div> Nysem Montalbán EIRL
-                           </p>
-                        </div>
-                    </div>
-
+                    <h1 className="text-[10rem] font-black text-[#020617] tracking-tighter leading-[0.8] uppercase italic">Gestión <br/>Maestra</h1>
                     <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-20">
                         {[
-                          { title: "CARTERA CLIENTES", val: clients.length, icon: Building2, color: "#0EA5E9" },
-                          { title: "ALERTAS SUNAT", val: clients.filter(c => getRiskStyle(c.ruc, c.taxStatus).text === 'VENCE HOY').length, icon: AlertTriangle, color: "#F43F5E" },
-                          { title: "STAFF AUDITOR", val: users.length, icon: Users, color: "#10B981" },
-                          { title: "AVANCES HOY", val: reports.filter(r => r.date === getTodayISO()).length, icon: Activity, color: "#6366F1" }
+                          { title: "CARTERA", val: clients.length, icon: Building2, color: "#0EA5E9" },
+                          { title: "ALERTAS", val: clients.filter(c => getRiskStyle(c.ruc, c.taxStatus).text === 'VENCE HOY').length, icon: AlertTriangle, color: "#F43F5E" },
+                          { title: "STAFF", val: users.length, icon: Users, color: "#10B981" },
+                          { title: "REPORTES", val: reports.length, icon: Activity, color: "#6366F1" }
                         ].map((stat, i) => (
-                          <div key={i} className="bg-white p-20 rounded-[7rem] border-b-[20px] shadow-[0_60px_120px_-20px_rgba(0,0,0,0.1)] hover:shadow-[0_100px_200px_-40px_rgba(14,165,233,0.2)] transition-all group relative overflow-hidden border-2 border-slate-50" style={{ borderBottomColor: stat.color }}>
-                              <div className="w-36 h-36 rounded-[3.5rem] bg-slate-50 flex items-center justify-center mb-16 group-hover:scale-110 transition-transform duration-700 shadow-2xl border border-slate-100">
-                                <stat.icon size={72} style={{ color: stat.color }}/>
-                              </div>
+                          <div key={i} className="bg-white p-20 rounded-[7rem] border-b-[20px] shadow-xl border-2 border-slate-50" style={{ borderBottomColor: stat.color }}>
+                              <stat.icon size={72} style={{ color: stat.color }} className="mb-16"/>
                               <h3 className="text-slate-400 text-[16px] font-black uppercase tracking-[0.7em] mb-6">{stat.title}</h3>
-                              <div className="text-[9rem] font-black text-[#020617] tracking-tighter leading-none mb-12">{stat.val}</div>
-                              <div className="absolute -right-28 -bottom-28 opacity-[0.05] text-[#020617] rotate-12"><stat.icon size={450}/></div>
+                              <div className="text-[9rem] font-black text-[#020617] tracking-tighter leading-none">{stat.val}</div>
                           </div>
                         ))}
                     </div>
                 </div>
             )}
 
-            {/* CARTERA CLIENTES */}
             {viewMode === 'clients' && (
-                <div className="max-w-7xl mx-auto space-y-28 animate-in fade-in zoom-in-95 duration-700 pb-40">
-                    <div className="bg-[#020617] p-24 rounded-[7rem] shadow-[0_80px_150px_-30px_rgba(0,0,0,0.5)] relative overflow-hidden group">
-                        <div className="absolute top-0 right-0 w-[700px] h-[700px] bg-[#0EA5E9]/15 rounded-full blur-[180px] -mr-80 -mt-80"></div>
+                <div className="max-w-7xl mx-auto space-y-28">
+                    <div className="bg-[#020617] p-24 rounded-[7rem] shadow-2xl relative overflow-hidden">
                         <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-20 border-b-2 border-white/5 pb-24 mb-24 relative z-10">
                            <div className="space-y-8">
-                              <h2 className="text-8xl font-black text-white tracking-tighter uppercase leading-none italic">Control Cartera</h2>
-                              <p className="text-[18px] font-bold text-[#0EA5E9] uppercase tracking-[0.8em] flex items-center gap-12 italic leading-none">
-                                 <div className="w-24 h-2 bg-[#10B981]"></div> Registro Permanente de Entidades
-                              </p>
+                              <h2 className="text-8xl font-black text-white tracking-tighter uppercase italic leading-none">Cartera Clientes</h2>
+                              <p className="text-[18px] font-bold text-[#0EA5E9] uppercase tracking-[0.8em] italic">Registro Permanente Nysem</p>
                            </div>
-                           <button onClick={handleSaveClient} className={`px-28 py-11 rounded-[4.5rem] text-[20px] font-black uppercase tracking-[0.6em] text-white shadow-3xl hover:scale-[1.05] transition-all flex items-center gap-10 border-4 border-white/20 active:scale-95 ${editingId ? 'bg-[#0EA5E9]' : 'bg-[#10B981]'}`}>
-                              {editingId ? <><Save size={40}/> ACTUALIZAR</> : <><Plus size={40}/> VINCULAR</>}
+                           <button onClick={handleSaveClient} className={`px-28 py-11 rounded-[4.5rem] text-[20px] font-black uppercase tracking-[0.6em] text-white shadow-3xl border-4 border-white/20 ${editingId ? 'bg-[#0EA5E9]' : 'bg-[#10B981]'}`}>
+                              {editingId ? "ACTUALIZAR" : "VINCULAR CLIENTE"}
                            </button>
                         </div>
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-20 relative z-10">
-                            <div className="space-y-8 lg:col-span-2">
-                                <label className="text-[16px] font-black text-slate-500 ml-16 uppercase tracking-widest leading-none">Razón Social</label>
-                                <input type="text" placeholder="EJ: CONSORCIO AGRÍCOLA..." value={clientForm.name} onChange={e => setClientForm({...clientForm, name: e.target.value})} className="w-full p-12 bg-white/5 rounded-[4rem] border-4 border-white/10 font-black text-white shadow-inner outline-none focus:bg-white/10 focus:border-[#0EA5E9] transition-all uppercase tracking-tight text-4xl placeholder:text-slate-800"/>
-                            </div>
-                            <div className="space-y-8">
-                                <label className="text-[16px] font-black text-slate-500 ml-16 uppercase tracking-widest text-center block">RUC (11 Dig)</label>
-                                <input type="text" placeholder="20XXXXXXXXX" value={clientForm.ruc} onChange={e => setClientForm({...clientForm, ruc: e.target.value})} className="w-full p-12 bg-white/5 rounded-[4rem] border-4 border-white/10 font-black text-white shadow-inner outline-none text-center font-mono focus:bg-white/10 transition-all text-4xl placeholder:text-slate-800"/>
-                            </div>
-                            <div className="space-y-8">
-                                <label className="text-[16px] font-black text-slate-500 ml-16 uppercase tracking-widest text-center block">Sector</label>
-                                <select value={clientForm.sector} onChange={e => setClientForm({...clientForm, sector: e.target.value})} className="w-full p-12 bg-white/5 rounded-[4rem] border-4 border-white/10 font-black text-white shadow-inner outline-none appearance-none cursor-pointer text-center text-[18px] uppercase tracking-[0.5em] h-28">
-                                    <option value="Agricultura">AGRICULTURA</option>
-                                    <option value="Construcción">CONSTRUCCIÓN</option>
-                                    <option value="Exportación">EXPORTACIÓN</option>
-                                    <option value="Comercio">COMERCIO</option>
-                                    <option value="Servicios">SERVICIOS</option>
-                                </select>
-                            </div>
+                            <input type="text" placeholder="RAZÓN SOCIAL" value={clientForm.name} onChange={e => setClientForm({...clientForm, name: e.target.value})} className="lg:col-span-2 p-12 bg-white/5 rounded-[4rem] border-4 border-white/10 font-black text-white text-4xl uppercase outline-none focus:border-[#0EA5E9] transition-all"/>
+                            <input type="text" placeholder="RUC" value={clientForm.ruc} onChange={e => setClientForm({...clientForm, ruc: e.target.value})} className="p-12 bg-white/5 rounded-[4rem] border-4 border-white/10 font-black text-white text-4xl uppercase outline-none text-center focus:border-[#0EA5E9] transition-all"/>
+                            <select value={clientForm.sector} onChange={e => setClientForm({...clientForm, sector: e.target.value})} className="p-12 bg-white/5 rounded-[4rem] border-4 border-white/10 font-black text-white text-[18px] uppercase text-center focus:border-[#0EA5E9] h-28">
+                                <option value="Agricultura">AGRICULTURA</option>
+                                <option value="Construcción">CONSTRUCCIÓN</option>
+                                <option value="Exportación">EXPORTACIÓN</option>
+                                <option value="Servicios">SERVICIOS</option>
+                            </select>
                         </div>
                     </div>
-
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-24">
                         {clients.map(c => {
                             const style = getRiskStyle(c.ruc, c.taxStatus);
                             return (
-                                <div key={c.id} className="bg-white p-24 rounded-[8rem] border-4 border-slate-50 flex flex-col justify-between items-start group shadow-2xl transition-all duration-700 relative overflow-hidden border-b-[30px] hover:border-[#0EA5E9]" style={{ borderBottomColor: style.text === 'VENCE HOY' ? '#F43F5E' : (c.taxStatus === 'declared' ? '#10B981' : '#F8FAFC') }}>
-                                    <div className="w-full">
-                                        <div className="flex justify-between items-start mb-20">
-                                            <div className="w-32 h-32 bg-slate-50 rounded-[3rem] flex items-center justify-center text-[#020617] shadow-inner group-hover:bg-[#020617] group-hover:text-white transition-all duration-700 border-2 border-slate-100"><Building2 size={64}/></div>
-                                            <div className={`px-12 py-5 rounded-full text-[16px] font-black uppercase tracking-[0.5em] border-4 transition-all duration-500 ${style.bg} ${style.tx} ${style.ring}`}>
-                                                {style.text}
-                                            </div>
-                                        </div>
-                                        <h3 className="font-black text-[#020617] uppercase text-6xl leading-[1] tracking-tighter group-hover:text-[#0EA5E9] transition-colors duration-500 mb-12 drop-shadow-sm">{c.name}</h3>
-                                        <div className="flex flex-wrap items-center gap-10 pt-12 border-t-4 border-slate-50">
-                                              <span className="text-[24px] font-black text-slate-400 font-mono tracking-widest leading-none bg-slate-50 px-10 py-5 rounded-3xl border-2 border-slate-100 shadow-inner">RUC {c.ruc}</span>
-                                              <span className="text-[16px] font-black text-[#10B981] uppercase tracking-[0.5em] leading-none flex items-center gap-6">
-                                                 <div className="w-5 h-5 rounded-full bg-[#10B981] shadow-[0_0_20px_rgba(16,185,129,1)] animate-pulse"></div> {c.sector}
-                                              </span>
-                                        </div>
+                                <div key={c.id} className="bg-white p-24 rounded-[8rem] border-4 border-slate-50 shadow-2xl transition-all border-b-[30px]" style={{ borderBottomColor: style.text === 'VENCE HOY' ? '#F43F5E' : (c.taxStatus === 'declared' ? '#10B981' : '#F8FAFC') }}>
+                                    <div className="flex justify-between items-start mb-20">
+                                        <div className="w-32 h-32 bg-slate-50 rounded-[3rem] flex items-center justify-center text-[#020617] border-2 border-slate-100"><Building2 size={64}/></div>
+                                        <div className={`px-12 py-5 rounded-full text-[16px] font-black uppercase tracking-[0.5em] border-4 ${style.bg} ${style.tx} ${style.ring}`}>{style.text}</div>
                                     </div>
-                                    <div className="w-full flex justify-between items-center mt-24 pt-20 border-t-4 border-slate-50">
-                                        <div className="flex items-center gap-8">
-                                           <button onClick={() => markAsDeclared(c.id)} className={`p-10 rounded-[2.5rem] transition-all duration-500 shadow-3xl active:scale-90 border-4 ${c.taxStatus === 'declared' ? 'bg-[#10B981] text-white border-[#10B981]' : 'bg-slate-50 text-slate-400 border-slate-100 hover:bg-[#10B981] hover:text-white hover:border-[#10B981]'}`} title="Declarar Impuestos">
-                                              <CheckCircle2 size={48}/>
-                                           </button>
-                                           <button onClick={() => { setEditingId(c.id); setClientForm({ name: c.name, ruc: c.ruc, sector: c.sector, honorario: c.honorario }); }} className="p-10 rounded-[2.5rem] bg-slate-50 text-slate-400 hover:bg-[#0EA5E9] hover:text-white transition-all duration-500 border-4 border-slate-100 shadow-3xl">
-                                              <Edit size={48}/>
-                                           </button>
+                                    <h3 className="font-black text-[#020617] uppercase text-6xl leading-[1] tracking-tighter mb-12">{c.name}</h3>
+                                    <div className="pt-12 border-t-4 border-slate-50 flex items-center justify-between">
+                                        <div className="flex gap-4">
+                                            <button onClick={() => markAsDeclared(c.id)} className="p-10 rounded-[2.5rem] bg-[#10B981] text-white shadow-xl"><CheckCircle2 size={48}/></button>
+                                            <button onClick={() => { setEditingId(c.id); setClientForm({ name: c.name, ruc: c.ruc, sector: c.sector, honorario: c.honorario }); }} className="p-10 rounded-[2.5rem] bg-slate-50 text-slate-400 border-4 border-slate-100 shadow-xl"><Edit size={48}/></button>
                                         </div>
-                                        <button onClick={() => deleteRecord('clients', c.id)} className="text-slate-100 hover:text-rose-600 transition-colors p-10 hover:bg-rose-50 rounded-[2.5rem] duration-500"><Trash2 size={52}/></button>
+                                        <button onClick={() => deleteRecord('clients', c.id)} className="text-slate-200 hover:text-rose-600 p-10"><Trash2 size={52}/></button>
                                     </div>
                                 </div>
                             );
@@ -462,169 +379,61 @@ export default function App() {
                 </div>
             )}
 
-            {/* MÓDULO DE SEGURIDAD Y ROLES */}
-            {viewMode === 'roles' && isAdmin && (
-                <div className="max-w-7xl mx-auto space-y-28 animate-in fade-in duration-700">
-                    <div className="bg-[#020617] p-24 rounded-[7rem] shadow-3xl text-white relative overflow-hidden">
-                        <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-emerald-500/10 rounded-full blur-[150px] -mr-64 -mt-64"></div>
-                        <div className="relative z-10 flex flex-col md:flex-row justify-between items-center gap-16">
-                           <div className="space-y-6">
-                              <h2 className="text-7xl font-black uppercase tracking-tighter italic flex items-center gap-10">
-                                 <ShieldCheck size={70} className="text-[#10B981]"/> Arquitectura de Roles
-                              </h2>
-                              <p className="text-2xl text-slate-400 font-bold tracking-tight italic">Estructura de Permisos y Segregación de Funciones Nysem</p>
+            {viewMode === 'staff' && isAdmin && (
+                <div className="max-w-7xl mx-auto space-y-28">
+                    <div className="bg-[#020617] p-24 rounded-[7rem] shadow-3xl text-white relative">
+                        <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-20 border-b border-white/5 pb-24 mb-24 relative z-10">
+                           <div className="space-y-8">
+                              <h2 className="text-7xl font-black uppercase tracking-tighter italic">Asistentes & Roles</h2>
+                              <p className="text-2xl text-slate-400 font-bold tracking-tight italic leading-none">Control de Staff Nysem</p>
                            </div>
-                           <div className="bg-white/5 p-10 rounded-[4rem] border-4 border-white/10 backdrop-blur-3xl text-center">
-                              <span className="text-[12px] font-black uppercase tracking-[0.5em] text-[#0EA5E9] block mb-4">Integridad del Nodo</span>
-                              <span className="text-4xl font-black text-[#10B981] uppercase tracking-widest flex items-center gap-4 justify-center">
-                                 <Key size={36}/> CIFRADO AES
-                              </span>
-                           </div>
+                           <button onClick={handleSaveUser} className={`px-28 py-11 rounded-[4.5rem] text-[20px] font-black uppercase tracking-[0.6em] text-white shadow-3xl border-4 border-white/20 ${editingId ? 'bg-[#0EA5E9]' : 'bg-[#10B981]'}`}>
+                              {editingId ? "GUARDAR CAMBIOS" : "INTEGRAR AUDITOR"}
+                           </button>
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-16 relative z-10">
+                            <input type="text" placeholder="NOMBRE STAFF" value={userForm.name} onChange={e => setUserForm({...userForm, name: e.target.value})} className="p-10 bg-white/5 rounded-[3.5rem] border-4 border-white/10 font-black text-white text-3xl uppercase outline-none focus:border-[#0EA5E9]"/>
+                            <input type="text" placeholder="USUARIO LOGIN" value={userForm.username} onChange={e => setUserForm({...userForm, username: e.target.value})} className="p-10 bg-white/5 rounded-[3.5rem] border-4 border-white/10 font-black text-white text-3xl uppercase outline-none focus:border-[#0EA5E9]"/>
+                            <input type="text" placeholder="CONTRASEÑA" value={userForm.password} onChange={e => setUserForm({...userForm, password: e.target.value})} className="p-10 bg-white/5 rounded-[3.5rem] border-4 border-white/10 font-black text-white text-3xl uppercase outline-none focus:border-[#0EA5E9]"/>
+                            <select value={userForm.role} onChange={e => setUserForm({...userForm, role: e.target.value})} className="p-10 bg-white/5 rounded-[3.5rem] border-4 border-white/10 font-black text-white text-[16px] uppercase h-28 text-center">
+                                <option value="Auditor">AUDITOR (STAFF)</option>
+                                <option value="Administrador">ADMINISTRADOR (CPC)</option>
+                            </select>
                         </div>
                     </div>
-
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-24">
-                        <div className="bg-white p-24 rounded-[6rem] border-4 border-slate-100 shadow-xl space-y-16">
-                           <div className="flex items-center gap-10 pb-10 border-b-4 border-slate-50">
-                              <div className="p-8 bg-sky-50 rounded-[2.5rem] text-sky-600 shadow-inner"><Monitor size={48}/></div>
-                              <div>
-                                 <h3 className="text-4xl font-black text-slate-900 uppercase tracking-tighter leading-none">Perfil Administrador</h3>
-                                 <p className="text-lg text-slate-400 font-bold tracking-widest mt-2 uppercase">Jerarquía Total (CPC)</p>
-                              </div>
-                           </div>
-                           <ul className="space-y-10">
-                              {[
-                                "Gestión Maestra de Staff y Auditoría de Cuentas.",
-                                "Apertura y Cierre de Entidades Contables.",
-                                "Aprobación de V°B° en Bitácora de Producción.",
-                                "Acceso a Reportes de Rentabilidad y Costeo HH.",
-                                "Mantenimiento de Nodo y Limpieza de Registros."
-                              ].map((item, i) => (
-                                <li key={i} className="flex items-center gap-8 text-2xl font-bold text-slate-700 italic group">
-                                   <div className="w-12 h-12 rounded-2xl bg-sky-50 flex items-center justify-center text-sky-600 group-hover:bg-sky-600 group-hover:text-white transition-all shadow-sm"><CheckCircle2 size={24}/></div>
-                                   {item}
-                                </li>
-                              ))}
-                           </ul>
-                        </div>
-
-                        <div className="bg-white p-24 rounded-[6rem] border-4 border-slate-100 shadow-xl space-y-16 opacity-80">
-                           <div className="flex items-center gap-10 pb-10 border-b-4 border-slate-50">
-                              <div className="p-8 bg-emerald-50 rounded-[2.5rem] text-emerald-600 shadow-inner"><Cpu size={48}/></div>
-                              <div>
-                                 <h3 className="text-4xl font-black text-slate-900 uppercase tracking-tighter leading-none">Perfil Auditor</h3>
-                                 <p className="text-lg text-slate-400 font-bold tracking-widest mt-2 uppercase">Fuerza Operativa (Staff)</p>
-                              </div>
-                           </div>
-                           <ul className="space-y-10">
-                              {[
-                                "Visualización de Cartera y Semáforo SUNAT.",
-                                "Registro de Avances y Horas de Producción.",
-                                "Consulta de Documentación de Entidades.",
-                                "Limitado: No puede eliminar registros maestros.",
-                                "Limitado: No tiene acceso a Gestión de Staff ni Roles."
-                              ].map((item, i) => (
-                                <li key={i} className="flex items-center gap-8 text-2xl font-bold text-slate-400 italic group">
-                                   <div className="w-12 h-12 rounded-2xl bg-slate-50 flex items-center justify-center text-slate-300 group-hover:bg-[#10B981] group-hover:text-white transition-all shadow-sm"><Lock size={24}/></div>
-                                   {item}
-                                </li>
-                              ))}
-                           </ul>
-                        </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-24">
+                        {users.map(u => (
+                            <div key={u.id} className="bg-white p-24 rounded-[8rem] border-4 border-slate-50 flex flex-col justify-between items-center group shadow-2xl border-b-[20px] hover:border-[#10B981] text-center">
+                                <div className="w-40 h-40 bg-slate-50 rounded-[4rem] flex items-center justify-center text-[#020617] border-4 border-slate-100 shadow-xl mb-16"><UserCog size={80}/></div>
+                                <h3 className="font-black text-[#020617] uppercase text-5xl leading-[1] mb-8">{u.name}</h3>
+                                <div className="flex flex-col items-center gap-6">
+                                   <span className="px-12 py-4 rounded-full text-[14px] font-black uppercase tracking-[0.5em] border-4 bg-[#0EA5E9]/10 text-[#0EA5E9] border-[#0EA5E9]/20">{u.role}</span>
+                                   <span className="text-[20px] font-black text-slate-300 font-mono tracking-[0.5em] uppercase italic opacity-70 italic">ID: {u.username}</span>
+                                </div>
+                                <div className="w-full flex justify-between items-center mt-24 pt-20 border-t-4 border-slate-50">
+                                    <button onClick={() => { setEditingId(u.id); setUserForm({ name: u.name, username: u.username, password: u.password, role: u.role }); }} className="p-10 rounded-[2.8rem] bg-slate-50 text-slate-400 border-4 border-slate-100 shadow-xl"><Edit size={48}/></button>
+                                    <button onClick={() => deleteRecord('users', u.id)} className="text-slate-100 hover:text-rose-600 p-10"><Trash2 size={52}/></button>
+                                </div>
+                            </div>
+                        ))}
                     </div>
                 </div>
             )}
 
-            {/* GESTIÓN DE STAFF */}
-            {viewMode === 'staff' && isAdmin && (
-               <div className="max-w-7xl mx-auto space-y-28 animate-in fade-in zoom-in-95 duration-700 pb-40">
-                  <div className="bg-[#020617] p-24 rounded-[7rem] shadow-3xl relative overflow-hidden group">
-                        <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-[#10B981]/15 rounded-full blur-[150px] -mr-72 -mt-72 transition-all"></div>
-                        <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-20 border-b border-white/5 pb-24 mb-24 relative z-10">
-                           <div className="space-y-8">
-                              <h2 className="text-7xl font-black text-white tracking-tighter uppercase leading-none italic">Gestión Personal</h2>
-                              <p className="text-[18px] font-bold text-[#10B981] uppercase tracking-[0.8em] flex items-center gap-12 italic leading-none">
-                                 <div className="w-24 h-2 bg-[#0EA5E9]"></div> Control de Auditores y Roles
-                              </p>
-                           </div>
-                           <button onClick={handleSaveUser} className={`px-28 py-11 rounded-[4.5rem] text-[20px] font-black uppercase tracking-[0.6em] text-white shadow-3xl hover:scale-[1.05] transition-all flex items-center gap-10 border-4 border-white/20 active:scale-95 ${editingId ? 'bg-[#0EA5E9]' : 'bg-[#10B981]'}`}>
-                              {editingId ? <><Save size={40}/> ACTUALIZAR</> : <><UserPlus size={40}/> INTEGRAR</>}
-                           </button>
-                        </div>
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-16 relative z-10">
-                            <div className="space-y-8">
-                                <label className="text-[14px] font-black text-slate-500 ml-12 uppercase tracking-widest leading-none">Nombre Staff</label>
-                                <input type="text" placeholder="CPC JUAN PÉREZ" value={userForm.name} onChange={e => setUserForm({...userForm, name: e.target.value})} className="w-full p-10 bg-white/5 rounded-[3.5rem] border-4 border-white/10 font-black text-white shadow-inner outline-none focus:bg-white/10 focus:border-[#0EA5E9] transition-all uppercase tracking-tight text-3xl placeholder:text-slate-800"/>
-                            </div>
-                            <div className="space-y-8">
-                                <label className="text-[14px] font-black text-slate-500 ml-12 uppercase tracking-widest leading-none">Usuario Login</label>
-                                <input type="text" placeholder="jperez" value={userForm.username} onChange={e => setUserForm({...userForm, username: e.target.value})} className="w-full p-10 bg-white/5 rounded-[3.5rem] border-4 border-white/10 font-black text-white shadow-inner outline-none focus:bg-white/10 focus:border-[#0EA5E9] transition-all uppercase tracking-tight text-3xl placeholder:text-slate-800"/>
-                            </div>
-                            <div className="space-y-8">
-                                <label className="text-[14px] font-black text-slate-500 ml-12 uppercase tracking-widest leading-none">Firma Clave</label>
-                                <input type="text" placeholder="****" value={userForm.password} onChange={e => setUserForm({...userForm, password: e.target.value})} className="w-full p-10 bg-white/5 rounded-[3.5rem] border-4 border-white/10 font-black text-white shadow-inner outline-none focus:bg-white/10 focus:border-[#0EA5E9] transition-all uppercase tracking-tight text-3xl placeholder:text-slate-800"/>
-                            </div>
-                            <div className="space-y-8">
-                                <label className="text-[14px] font-black text-slate-500 ml-12 uppercase tracking-widest leading-none text-center block">Rango</label>
-                                <select value={userForm.role} onChange={e => setUserForm({...userForm, role: e.target.value})} className="w-full p-10 bg-white/5 rounded-[3.5rem] border-4 border-white/10 font-black text-white shadow-inner outline-none appearance-none cursor-pointer text-center text-[16px] uppercase tracking-[0.5em] h-28">
-                                    <option value="Auditor">AUDITOR (STAFF)</option>
-                                    <option value="Administrador">ADMINISTRADOR (CPC)</option>
-                                </select>
-                            </div>
-                        </div>
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-24">
-                        {users.map(u => (
-                            <div key={u.id} className="bg-white p-24 rounded-[8rem] border-4 border-slate-50 flex flex-col justify-between items-start group shadow-2xl transition-all duration-700 animate-in slide-in-from-bottom-24 border-b-[20px] hover:border-[#10B981]">
-                                <div className="w-full text-center">
-                                    <div className="flex justify-center items-start mb-16">
-                                        <div className="w-40 h-40 bg-slate-50 rounded-[4rem] flex items-center justify-center text-[#020617] shadow-inner group-hover:bg-[#10B981] group-hover:text-white transition-all duration-700 border-4 border-slate-100 shadow-xl mx-auto"><UserCog size={80}/></div>
-                                    </div>
-                                    <h3 className="font-black text-[#020617] uppercase text-5xl leading-[1] tracking-tighter group-hover:text-[#10B981] transition-colors duration-500 mb-8">{u.name}</h3>
-                                    <div className="flex flex-col items-center gap-6">
-                                       <span className="px-12 py-4 rounded-full text-[14px] font-black uppercase tracking-[0.5em] border-4 bg-[#0EA5E9]/10 text-[#0EA5E9] border-[#0EA5E9]/20">{u.role}</span>
-                                       <span className="text-[20px] font-black text-slate-300 font-mono tracking-[0.5em] uppercase italic opacity-70">CRED: {u.username}</span>
-                                    </div>
-                                </div>
-                                <div className="w-full flex justify-between items-center mt-24 pt-20 border-t-4 border-slate-50">
-                                    <button onClick={() => { setEditingId(u.id); setUserForm({ name: u.name, username: u.username, password: u.password, role: u.role }); }} className="p-10 rounded-[2.8rem] bg-slate-50 text-slate-400 hover:bg-[#0EA5E9] hover:text-white transition-all shadow-3xl active:scale-90 border-4 border-slate-100"><Edit size={48}/></button>
-                                    <button onClick={() => deleteRecord('users', u.id)} className="text-slate-100 hover:text-rose-600 transition-colors p-10 hover:bg-rose-50 rounded-[2.8rem] duration-500"><Trash2 size={52}/></button>
-                                </div>
-                            </div>
-                        ))}
-                  </div>
-               </div>
-            )}
-
-            {/* BITÁCORA DE PRODUCCIÓN */}
             {viewMode === 'reports' && (
                <div className="max-w-7xl mx-auto grid grid-cols-1 xl:grid-cols-3 gap-28 animate-in fade-in duration-700 pb-40">
-                  <div className="bg-[#020617] p-24 rounded-[7rem] shadow-[0_80px_150px_-30px_rgba(0,0,0,0.5)] h-fit sticky top-12 overflow-hidden border-b-[20px] border-[#10B981]">
-                        <div className="absolute top-0 right-0 w-96 h-96 bg-[#10B981]/15 rounded-full blur-[100px] -mr-48 -mt-48 transition-all duration-1000"></div>
-                        <div className="flex items-center gap-12 mb-20 relative z-10">
-                           <div className="p-10 bg-[#10B981] rounded-[3rem] text-white shadow-3xl group-hover:scale-110 transition-transform duration-500"><Timer size={64}/></div>
-                           <div className="space-y-4">
-                              <h2 className="text-5xl font-black text-white uppercase tracking-tighter leading-none italic">Reportar</h2>
-                              <p className="text-[14px] font-black text-[#0EA5E9] uppercase tracking-[0.8em] leading-none italic">Fuerza Staff Diaria</p>
-                           </div>
+                  <div className="bg-[#020617] p-24 rounded-[7rem] shadow-2xl h-fit border-b-[20px] border-[#10B981]">
+                        <div className="flex items-center gap-12 mb-20">
+                           <div className="p-10 bg-[#10B981] rounded-[3rem] text-white shadow-3xl"><Timer size={64}/></div>
+                           <h2 className="text-5xl font-black text-white uppercase italic leading-none">Reportar</h2>
                         </div>
-                        <div className="space-y-16 relative z-10">
-                            <div className="space-y-6">
-                                <label className="text-[16px] font-black text-slate-500 ml-16 uppercase tracking-widest leading-none">Hora de Labor</label>
-                                <input type="time" value={reportForm.time} onChange={e => setReportForm({...reportForm, time: e.target.value})} className="w-full p-11 bg-white/5 rounded-[4rem] border-4 border-white/10 font-black text-white shadow-inner outline-none focus:bg-white/10 focus:border-[#0EA5E9] transition-all text-4xl"/>
-                            </div>
-                            <div className="space-y-6">
-                                <label className="text-[16px] font-black text-slate-500 ml-16 uppercase tracking-widest leading-none">Entidad Bajo Auditoría</label>
-                                <select value={reportForm.clientName} onChange={e => setReportForm({...reportForm, clientName: e.target.value})} className="w-full p-11 bg-white/5 rounded-[4rem] border-4 border-white/10 font-black text-white shadow-inner outline-none text-[18px] uppercase tracking-[0.4em] cursor-pointer h-28">
-                                    <option value="">SELECCIÓN NODO...</option>
-                                    {clients.map(c => <option key={c.id} value={c.name} className="text-slate-900">{c.name}</option>)}
-                                </select>
-                            </div>
-                            <div className="space-y-6">
-                                <label className="text-[16px] font-black text-slate-500 ml-16 uppercase tracking-widest leading-none text-center block">Labor Operativa</label>
-                                <textarea value={reportForm.description} onChange={e => setReportForm({...reportForm, description: e.target.value})} className="w-full p-14 bg-white/5 rounded-[4.5rem] border-4 border-white/10 resize-none h-[500px] font-medium text-white shadow-inner text-[26px] leading-relaxed outline-none focus:bg-white/10 focus:border-[#0EA5E9] transition-all placeholder:text-slate-800" placeholder="Detalle los avances tributarios o fiscales realizados..."></textarea>
-                            </div>
+                        <div className="space-y-16">
+                            <input type="time" value={reportForm.time} onChange={e => setReportForm({...reportForm, time: e.target.value})} className="w-full p-11 bg-white/5 rounded-[4rem] border-4 border-white/10 font-black text-white text-4xl uppercase outline-none"/>
+                            <select value={reportForm.clientName} onChange={e => setReportForm({...reportForm, clientName: e.target.value})} className="w-full p-11 bg-white/5 rounded-[4rem] border-4 border-white/10 font-black text-white text-[18px] uppercase h-28 text-center">
+                                <option value="">CLIENTE...</option>
+                                {clients.map(c => <option key={c.id} value={c.name} className="text-black">{c.name}</option>)}
+                            </select>
+                            <textarea value={reportForm.description} onChange={e => setReportForm({...reportForm, description: e.target.value})} className="w-full p-14 bg-white/5 rounded-[4.5rem] border-4 border-white/10 resize-none h-[500px] font-medium text-white text-[26px] outline-none" placeholder="DETALLE OPERATIVO..."></textarea>
                             <button onClick={async () => {
                                 if(!reportForm.description || !reportForm.clientName || !user) return;
                                 try {
@@ -632,77 +441,48 @@ export default function App() {
                                     ...reportForm, userName: currentUserData?.name, createdAt: Timestamp.now() 
                                   });
                                   setReportForm({ ...reportForm, description: '', time: '' });
-                                  notify("Avance reportado correctamente.");
-                                } catch(e) { notify("Fallo en el reporte.", "error"); }
-                            }} className="w-full bg-[#10B981] text-white py-14 rounded-[5rem] font-black text-[22px] uppercase tracking-[1em] shadow-3xl hover:bg-emerald-700 transition-all active:scale-95 group flex items-center justify-center gap-10 border-4 border-white/20">
-                               <Timer size={44} className="group-hover:rotate-12 transition-transform"/> ARCHIVAR
-                            </button>
+                                  notify("Avance reportado.");
+                                } catch(e) { notify("Error al reportar.", "error"); }
+                            }} className="w-full bg-[#10B981] text-white py-14 rounded-[5rem] font-black text-[22px] uppercase tracking-[1em] shadow-3xl">ARCHIVAR</button>
                         </div>
                   </div>
 
-                  <div className="xl:col-span-2 bg-white p-28 rounded-[9rem] border-4 border-slate-50 shadow-sm min-h-[1600px] overflow-hidden">
-                        <div className="flex flex-col md:flex-row justify-between items-start md:items-center border-b-8 border-slate-50 pb-24 mb-28 gap-16">
-                            <div className="space-y-6">
-                               <h3 className="font-black text-[#020617] text-[6rem] uppercase tracking-tighter leading-none italic drop-shadow-sm">Historial</h3>
-                               <p className="text-[18px] font-black text-slate-400 uppercase tracking-[1em] leading-none flex items-center gap-10 italic">
-                                 <div className="w-24 h-2 bg-[#0EA5E9]"></div> Registro Maestro de Productividad
-                               </p>
-                            </div>
-                            <div className="bg-[#020617] px-16 py-10 rounded-full text-[24px] font-black text-[#0EA5E9] uppercase tracking-[0.5em] shadow-3xl flex items-center gap-10 border-4 border-white/10">
-                               <Clock size={44} className="animate-pulse"/> {getTodayISO()}
-                            </div>
-                        </div>
-                        
+                  <div className="xl:col-span-2 bg-white p-28 rounded-[9rem] border-4 border-slate-50 min-h-[1600px]">
+                        <h3 className="font-black text-[#020617] text-[6rem] uppercase tracking-tighter italic mb-28 border-b-8 border-slate-50 pb-10">Bitácora Global</h3>
                         <div className="space-y-28 relative border-l-[20px] border-slate-50 ml-20 pb-60">
-                            {reports.length > 0 ? (
-                                reports.map((r, i) => (
-                                    <div key={r.id} className="relative pl-28 animate-in slide-in-from-left-24 duration-700" style={{ animationDelay: `${i * 100}ms` }}>
-                                        <div className="absolute -left-[45px] top-4 w-18 h-18 rounded-full bg-[#10B981] border-[15px] border-white shadow-3xl ring-[35px] ring-[#10B981]/10 group hover:scale-150 transition-transform duration-500"></div>
-                                        <div className="bg-slate-50/60 p-20 rounded-[8rem] border-4 border-slate-100 flex flex-col md:flex-row md:justify-between md:items-start gap-16 hover:bg-white hover:shadow-3xl hover:border-[#10B981]/30 transition-all duration-700 group relative">
-                                            <div className="flex-1">
-                                                <div className="flex flex-wrap items-center gap-12 mb-14">
-                                                    <span className="text-[20px] font-black text-[#10B981] uppercase tracking-[0.6em] bg-[#10B981]/10 px-12 py-6 rounded-full border-4 border-[#10B981]/20 leading-none shadow-sm">{r.clientName}</span>
-                                                    <span className="text-[20px] font-mono font-black text-slate-400 leading-none uppercase tracking-[0.5em] bg-white px-10 py-6 rounded-3xl border-4 border-slate-100 shadow-inner">{r.time}</span>
-                                                </div>
-                                                <p className="text-[42px] font-bold text-[#020617] leading-tight italic group-hover:text-black transition-colors duration-500 font-serif drop-shadow-sm leading-snug">"{r.description}"</p>
-                                                <div className="mt-24 flex items-center gap-12 text-[18px] font-black text-slate-400 uppercase tracking-[0.8em]">
-                                                    <div className="w-28 h-28 rounded-[3rem] bg-white border-4 border-slate-100 flex items-center justify-center text-[#10B981] font-black text-5xl group-hover:bg-[#10B981] group-hover:text-white transition-all shadow-2xl group-hover:rotate-12 duration-500">
-                                                      {r.userName?.charAt(0)}
-                                                    </div>
-                                                    <div>
-                                                      <span className="block text-[#020617] text-3xl tracking-tighter mb-4 italic font-black">{r.userName}</span>
-                                                      <span className="block opacity-60">Auditor Responsable Nysem</span>
-                                                    </div>
+                            {reports.map((r, i) => (
+                                <div key={r.id} className="relative pl-28 animate-in slide-in-from-left-24">
+                                    <div className="absolute -left-[45px] top-4 w-18 h-18 rounded-full bg-[#10B981] border-[15px] border-white shadow-3xl"></div>
+                                    <div className="bg-slate-50 p-20 rounded-[8rem] border-4 border-slate-100 flex flex-col md:flex-row md:justify-between md:items-start gap-16 group">
+                                        <div className="flex-1">
+                                            <div className="flex items-center gap-12 mb-10">
+                                                <span className="text-[20px] font-black text-[#10B981] uppercase bg-[#10B981]/10 px-12 py-6 rounded-full">{r.clientName}</span>
+                                                <span className="text-[20px] font-mono font-black text-slate-400">{r.time}</span>
+                                            </div>
+                                            <p className="text-[42px] font-bold text-[#020617] italic font-serif leading-snug">"{r.description}"</p>
+                                            <div className="mt-24 flex items-center gap-12 text-[18px] font-black text-slate-400 uppercase tracking-[0.8em]">
+                                                <div className="w-28 h-28 rounded-[3rem] bg-white border-4 border-slate-100 flex items-center justify-center text-[#10B981] font-black text-5xl">{r.userName?.charAt(0)}</div>
+                                                <div>
+                                                  <span className="block text-[#020617] text-3xl font-black italic">{r.userName}</span>
+                                                  <span className="block opacity-60">AUDITOR NYSEM</span>
                                                 </div>
                                             </div>
-                                            <button onClick={() => deleteRecord('reports', r.id)} className="text-slate-100 hover:text-rose-600 p-12 transition-all duration-500 opacity-0 group-hover:opacity-100 relative z-20 active:scale-90"><Trash2 size={56}/></button>
                                         </div>
+                                        <button onClick={() => deleteRecord('reports', r.id)} className="text-slate-200 hover:text-rose-600 p-12 opacity-0 group-hover:opacity-100 transition-all"><Trash2 size={56}/></button>
                                     </div>
-                                ))
-                            ) : (
-                                <div className="py-[400px] text-center opacity-30">
-                                    <Activity size={250} className="mx-auto mb-20 text-slate-200 animate-pulse"/>
-                                    <p className="text-4xl font-black text-slate-300 uppercase tracking-[1.5em] italic">Nodo Sin Datos</p>
                                 </div>
-                            )}
+                            ))}
                         </div>
-                    </div>
+                  </div>
                </div>
             )}
-
           </div>
-          
-          {/* FOOTER PREMIUM */}
-          <footer className="h-28 bg-[#020617] flex items-center px-28 justify-between text-[13px] font-black text-slate-600 uppercase tracking-[1em] z-50 border-t-8 border-[#F1F5F9]/5 shadow-[-30px_0_60px_rgba(0,0,0,0.4)]">
-             <span>Nysem Montalbán EIRL • Consultoría Especializada 2026</span>
+
+          <footer className="h-28 bg-[#020617] flex items-center px-28 justify-between text-[13px] font-black text-slate-600 uppercase tracking-[1em] border-t-8 border-[#F1F5F9]/5">
+             <span>Nysem Montalbán EIRL • 2026</span>
              <span className="flex items-center gap-20">
-                <span className="flex items-center gap-6 text-[#0EA5E9] font-black italic">
-                   <div className="w-5 h-5 rounded-full bg-[#10B981] shadow-[0_0_25px_rgba(16,185,129,1)]"></div> MASTER CONNECTED
-                </span>
-                <span className="text-white/5 font-thin text-6xl opacity-20">|</span>
-                <span className="flex items-center gap-8 group cursor-help transition-all hover:text-white">
-                   <ShieldCheck size={24} className="text-slate-700 group-hover:text-[#10B981]"/> CORE v22.0.0 (STABLE)
-                </span>
+                <span className="flex items-center gap-6 text-[#0EA5E9] font-black italic"><div className="w-5 h-5 rounded-full bg-[#10B981]"></div> MASTER CONNECTED</span>
+                <span className="flex items-center gap-8"><ShieldCheck size={24}/> CORE v23.0.0</span>
              </span>
           </footer>
        </main>
