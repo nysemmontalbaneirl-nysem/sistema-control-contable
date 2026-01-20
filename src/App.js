@@ -21,11 +21,10 @@ import {
 
 /**
  * NYSEM MONTALBAN EIRL - SISTEMA DE GESTIÓN DE PRODUCCIÓN (SGP)
- * VERSIÓN 26.0.0 - VERCEL ELITE PERFORMANCE
- * SOLUCIÓN: Segmentos de Firebase (Ruta Impar), Renderizado de Objetos y Dashboard Horizontal.
+ * VERSIÓN 27.0.0 - GLOBAL SYNC & PERSISTENCE FIX
+ * SOLUCIÓN: Sanitización de appId estática para sincronización multi-dispositivo.
  */
 
-// 1. CONFIGURACIÓN ROBUSTA (Prioridad Vercel y fallback local)
 const getFirebaseConfig = () => {
   if (typeof __firebase_config !== 'undefined' && __firebase_config) {
     try { return JSON.parse(__firebase_config); } catch (e) { return null; }
@@ -42,10 +41,9 @@ const getFirebaseConfig = () => {
 
 const firebaseConfig = getFirebaseConfig();
 
-// 2. SANITIZACIÓN CRÍTICA DE RUTA (Regla de segmentos impares)
-// Eliminamos cualquier slash que convierta el ID en una sub-ruta, causando error de segmentos pares.
-const rawId = typeof __app_id !== 'undefined' ? __app_id : 'nysem-master-node';
-const appId = rawId.replace(/[\/\.]/g, '_'); 
+// IDENTIFICADOR DE NODO ESTÁTICO (Crítico para Vercel)
+// Forzamos un ID que no dependa de variables dinámicas que cambian entre navegadores.
+const appId = "nysem_sgp_production_node"; 
 
 let app, auth, db;
 if (firebaseConfig && firebaseConfig.apiKey) {
@@ -53,7 +51,7 @@ if (firebaseConfig && firebaseConfig.apiKey) {
     app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
     auth = getAuth(app);
     db = getFirestore(app);
-  } catch (e) { console.error("Firebase Init Error:", e); }
+  } catch (e) { console.error("Firebase fail:", e); }
 }
 
 const getTodayISO = () => new Date().toISOString().split('T')[0];
@@ -84,7 +82,7 @@ export default function App() {
     setTimeout(() => setNotification(null), 3500);
   };
 
-  // 3. AUTENTICACIÓN PROTEGIDA (Regla 3)
+  // Autenticación inicial
   useEffect(() => {
     const initAuth = async () => {
       if (!auth) { setIsInitializing(false); return; }
@@ -94,7 +92,7 @@ export default function App() {
         } else {
           await signInAnonymously(auth);
         }
-      } catch (err) { console.error("Auth process error:", err); }
+      } catch (err) { console.error("Auth error:", err); }
       finally { setIsInitializing(false); }
     };
     initAuth();
@@ -102,44 +100,57 @@ export default function App() {
     return () => unsubscribe();
   }, []);
 
-  // 4. SINCRONIZACIÓN DE DATOS (Rutas de 5 segmentos estrictos)
+  // Sincronización Global de Datos
   useEffect(() => {
     if (!fbUser || !db) return;
     
-    // Path: artifacts (1) / {appId} (2) / public (3) / data (4) / {collection} (5)
+    // Rutas con 5 segmentos para evitar errores de Firestore
     const usersRef = collection(db, 'artifacts', appId, 'public', 'data', 'users');
     const clientsRef = collection(db, 'artifacts', appId, 'public', 'data', 'clients');
     const reportsRef = collection(db, 'artifacts', appId, 'public', 'data', 'reports');
 
     const unsubUsers = onSnapshot(usersRef, (snap) => {
       setUsers(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-    }, (err) => console.error("Sync error users:", err));
+    }, (err) => {
+      console.error("Users Sync Error:", err);
+      if(err.code === 'permission-denied') notify("Error de Permisos en Nodo.", "error");
+    });
 
     const unsubClients = onSnapshot(clientsRef, (snap) => {
       setClients(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-    }, (err) => console.error("Sync error clients:", err));
+    });
 
     const unsubReports = onSnapshot(query(reportsRef, orderBy("createdAt", "desc")), (snap) => {
       setReports(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-    }, (err) => console.error("Sync error reports:", err));
+    });
 
     return () => { unsubUsers(); unsubClients(); unsubReports(); };
   }, [fbUser]);
 
   const handleLogin = (e) => {
     if (e) e.preventDefault();
-    if (loginForm.username === 'admin' && loginForm.password === 'admin') {
+    const inputUser = loginForm.username.trim().toLowerCase();
+    const inputPass = loginForm.password.trim();
+
+    // Login Maestro
+    if (inputUser === 'admin' && inputPass === 'admin') {
       setCurrentUserData({ name: 'CPC Nysem Montalbán', role: 'Administrador' });
       setIsLoggedIn(true);
       return;
     }
-    const found = users.find(u => u.username === loginForm.username && u.password === loginForm.password);
+
+    // Búsqueda en base de datos sincronizada
+    const found = users.find(u => 
+      String(u.username || "").trim().toLowerCase() === inputUser && 
+      String(u.password || "").trim() === inputPass
+    );
+
     if (found) {
       setCurrentUserData(found);
       setIsLoggedIn(true);
       setAccessError(null);
     } else {
-      setAccessError("Identidad no reconocida en el nodo Nysem.");
+      setAccessError("Identidad no reconocida. Verifique mayúsculas y espacios.");
     }
   };
 
@@ -154,11 +165,11 @@ export default function App() {
         notify("Entidad Actualizada.");
       } else {
         await addDoc(colRef, { ...clientForm, taxStatus: 'pending', createdAt: Timestamp.now() });
-        notify("Entidad Vinculada Correctamente.");
+        notify("Entidad Guardada en la Nube.");
       }
       setClientForm({ name: '', ruc: '', sector: 'Servicios', honorario: '' });
       setEditingId(null);
-    } catch (e) { notify("Error al guardar cliente.", "error"); }
+    } catch (e) { notify("Fallo al guardar cliente.", "error"); }
   };
 
   const handleSaveUser = async () => {
@@ -169,14 +180,14 @@ export default function App() {
         await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'users', editingId), {
           ...userForm, updatedAt: Timestamp.now()
         });
-        notify("Staff Actualizado.");
+        notify("Asistente Actualizado.");
       } else {
         await addDoc(colRef, { ...userForm, createdAt: Timestamp.now() });
-        notify("Asistente Integrado al Equipo.");
+        notify(`Usuario ${userForm.username} registrado.`);
       }
       setUserForm({ name: '', username: '', password: '', role: 'Auditor' });
       setEditingId(null);
-    } catch (e) { notify("Error al registrar staff.", "error"); }
+    } catch (e) { notify("Fallo al registrar staff.", "error"); }
   };
 
   const deleteRecord = async (col, id) => {
@@ -197,8 +208,7 @@ export default function App() {
 
   const getRiskStyle = (ruc, taxStatus) => {
     if (taxStatus === 'declared') return { text: 'DECLARADO', bg: 'bg-[#10B981]/10', tx: 'text-[#10B981]' };
-    const rucStr = String(ruc || "");
-    const lastDigit = parseInt(rucStr.slice(-1));
+    const lastDigit = parseInt(String(ruc || "").slice(-1));
     if ([0, 1, 2].includes(lastDigit)) return { text: 'VENCE HOY', bg: 'bg-red-50', tx: 'text-red-600' };
     if ([3, 4, 5, 6].includes(lastDigit)) return { text: 'PRÓXIMO', bg: 'bg-orange-50', tx: 'text-orange-600' };
     return { text: 'EN PLAZO', bg: 'bg-[#0EA5E9]/10', tx: 'text-[#0EA5E9]' };
@@ -211,7 +221,7 @@ export default function App() {
           <RefreshCw className="text-[#0EA5E9] animate-spin" size={96} />
           <div className="text-center">
              <p className="text-[16px] font-black tracking-[1.8em] uppercase text-[#0EA5E9] ml-[1.8em]">NYSEM MONTALBÁN</p>
-             <p className="text-[20px] text-slate-500 uppercase tracking-widest mt-8 animate-pulse italic">Iniciando Nodo Maestro v26.0</p>
+             <p className="text-[20px] text-slate-500 uppercase tracking-widest mt-8 animate-pulse italic">Conectando Nodo Global v27.0</p>
           </div>
         </div>
       </div>
@@ -221,11 +231,11 @@ export default function App() {
   if (!isLoggedIn) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-[#F1F5F9] p-10 font-sans">
-        <div className="bg-white w-full max-w-3xl rounded-[6rem] shadow-[0_100px_200px_-50px_rgba(0,0,0,0.3)] overflow-hidden border border-white">
+        <div className="bg-white w-full max-w-3xl rounded-[6rem] shadow-2xl overflow-hidden border border-white">
           <div className="bg-[#020617] p-24 text-center text-white relative border-b-[12px] border-[#10B981]">
             <Shield className="mx-auto mb-14 text-[#0EA5E9]" size={130}/>
             <h1 className="text-8xl font-black uppercase tracking-tighter mb-8 italic leading-none">MASTER LOGIN</h1>
-            <p className="text-[16px] font-black text-slate-500 uppercase tracking-[1em] ml-[1em]">Asesoría & Capacitación</p>
+            <p className="text-[16px] font-black text-slate-500 uppercase tracking-[1em] ml-[1em]">Nysem Montalbán EIRL</p>
           </div>
           <div className="p-24 space-y-12 bg-white">
             <form onSubmit={handleLogin} className="space-y-10">
@@ -234,8 +244,10 @@ export default function App() {
                   {accessError}
                 </div>
               )}
-              <input type="text" placeholder="ID DE USUARIO" value={loginForm.username} onChange={e => setLoginForm({...loginForm, username: e.target.value})} className="w-full p-11 bg-slate-50 rounded-[4rem] border-4 border-slate-100 font-black text-slate-900 shadow-inner outline-none focus:bg-white focus:border-[#0EA5E9] transition-all text-4xl uppercase tracking-widest" required />
-              <input type="password" placeholder="CLAVE DIGITAL" value={loginForm.password} onChange={e => setLoginForm({...loginForm, password: e.target.value})} className="w-full p-11 bg-slate-50 rounded-[4rem] border-4 border-slate-100 font-black text-slate-900 shadow-inner outline-none focus:bg-white focus:border-[#0EA5E9] transition-all text-4xl uppercase tracking-widest" required />
+              <div className="space-y-8">
+                <input type="text" placeholder="USUARIO" value={loginForm.username} onChange={e => setLoginForm({...loginForm, username: e.target.value})} className="w-full p-11 bg-slate-50 rounded-[4rem] border-4 border-slate-100 font-black text-slate-900 shadow-inner outline-none focus:bg-white focus:border-[#0EA5E9] transition-all text-4xl uppercase tracking-widest" required />
+                <input type="password" placeholder="CLAVE" value={loginForm.password} onChange={e => setLoginForm({...loginForm, password: e.target.value})} className="w-full p-11 bg-slate-50 rounded-[4rem] border-4 border-slate-100 font-black text-slate-900 shadow-inner outline-none focus:bg-white focus:border-[#0EA5E9] transition-all text-4xl uppercase tracking-widest" required />
+              </div>
               <button type="submit" className="w-full bg-[#020617] text-white py-12 rounded-[5rem] font-black text-[22px] uppercase tracking-[0.8em] hover:bg-[#0EA5E9] transition-all shadow-3xl active:scale-95 mt-10">Entrar a Consola</button>
             </form>
           </div>
@@ -249,7 +261,7 @@ export default function App() {
   return (
     <div className="flex min-h-screen bg-[#F8FAFC] font-sans">
        
-       {/* NOTIFICACIONES GERENCIALES */}
+       {/* NOTIFICACIONES */}
        {notification && (
          <div className={`fixed top-12 right-12 z-[100] p-10 rounded-[3rem] shadow-2xl border-4 flex items-center gap-8 animate-in slide-in-from-right-32 ${notification.type === 'success' ? 'bg-[#10B981] border-white text-white' : 'bg-red-600 border-white text-white'}`}>
             <BadgeCheck size={48}/>
@@ -257,19 +269,18 @@ export default function App() {
          </div>
        )}
 
-       {/* SIDEBAR CORPORATIVO */}
-       <aside className={`${sidebarOpen ? 'w-[480px]' : 'w-40'} bg-[#020617] flex flex-col transition-all duration-700 shadow-2xl z-50 relative border-r border-white/5`}>
+       <aside className={`${sidebarOpen ? 'w-[480px]' : 'w-40'} bg-[#020617] flex flex-col transition-all duration-500 shadow-2xl z-50 relative border-r border-white/5`}>
          <div className="h-56 flex items-center px-20 border-b border-white/5">
             <Database className="text-[#10B981] drop-shadow-[0_0_15px_rgba(16,185,129,0.5)]" size={60}/>
             {sidebarOpen && (
               <div className="ml-12 animate-in fade-in slide-in-from-left-10">
                 <span className="block font-black text-6xl text-white tracking-tighter uppercase italic leading-none">NYSEM</span>
-                <span className="text-[14px] font-black text-[#0EA5E9] uppercase tracking-[0.8em] mt-6">MASTER v26</span>
+                <span className="text-[14px] font-black text-[#0EA5E9] uppercase tracking-[0.8em] mt-6">SYNC v27</span>
               </div>
             )}
          </div>
 
-         <nav className="flex-1 p-16 space-y-8 overflow-y-auto custom-scrollbar">
+         <nav className="flex-1 p-16 space-y-8 overflow-y-auto">
             {[
               { id: 'dashboard', label: 'Dashboard', icon: Home, show: true },
               { id: 'clients', label: 'Cartera Clientes', icon: Building2, show: true },
@@ -300,7 +311,7 @@ export default function App() {
                 <button onClick={() => setSidebarOpen(!sidebarOpen)} className="p-10 bg-slate-50 hover:bg-[#0EA5E9]/10 rounded-[3rem] text-slate-400 hover:text-[#0EA5E9] border-4 border-slate-100 shadow-xl transition-all">
                   <Menu size={56}/>
                 </button>
-                <div className="hidden lg:block">
+                <div className="hidden lg:block border-l-8 border-[#0EA5E9] pl-8">
                     <h2 className="text-6xl font-black text-slate-900 tracking-tighter uppercase italic leading-none">{viewMode}</h2>
                     <p className="text-[14px] font-black text-slate-400 tracking-[0.6em] uppercase mt-4 italic">Nysem Montalbán EIRL</p>
                 </div>
@@ -308,13 +319,13 @@ export default function App() {
             
             <div className="flex items-center gap-16">
                <div className="hidden xl:flex flex-col items-end">
-                  <span className="text-[12px] font-black text-slate-300 uppercase tracking-[0.6em] mb-3 leading-none italic">NODO VERCEL ACTIVO</span>
+                  <span className="text-[12px] font-black text-slate-300 uppercase tracking-[0.6em] mb-3 leading-none italic uppercase">Sincronización Multi-Puesto</span>
                   <span className="text-[20px] font-black text-[#10B981] uppercase flex items-center gap-5">
-                    <Zap size={28} fill="currentColor" className="animate-pulse"/> SINCRONIZACIÓN GOOGLE
+                    <Zap size={28} fill="currentColor" className="animate-pulse"/> RED GLOBAL ACTIVA
                   </span>
                </div>
                <div className="h-28 w-[4px] bg-slate-100 rounded-full"></div>
-               <div className="bg-[#020617] px-16 py-8 rounded-[3rem] font-mono text-[28px] font-black text-[#0EA5E9] flex items-center gap-10 shadow-inner">
+               <div className="bg-[#020617] px-16 py-8 rounded-[3rem] font-mono text-[28px] font-black text-[#0EA5E9] flex items-center gap-10">
                   <Calendar size={40}/> {getTodayISO()}
                </div>
             </div>
@@ -322,34 +333,34 @@ export default function App() {
 
           <div className="flex-1 overflow-y-auto p-20 lg:p-32 custom-scrollbar bg-[#F8FAFC] space-y-32">
             
-            {/* DASHBOARD HORIZONTAL: ICONO IZQUIERDA | VALOR DERECHA */}
+            {/* DASHBOARD HORIZONTAL */}
             {viewMode === 'dashboard' && (
                 <div className="space-y-32 animate-in fade-in duration-1000">
-                    <div className="space-y-10 border-l-[20px] border-[#0EA5E9] pl-20">
+                    <div className="space-y-10 border-l-[20px] border-[#0EA5E9] pl-20 py-4">
                        <h1 className="text-[11rem] font-black text-[#020617] tracking-tighter leading-[0.8] uppercase italic drop-shadow-2xl">Control <br/>Maestro</h1>
                        <p className="text-4xl font-bold text-slate-400 tracking-tight flex items-center gap-10 italic">
-                         <div className="w-40 h-3 bg-[#10B981] rounded-full shadow-[0_0_20px_rgba(16,185,129,0.7)]"></div> Gestión de Producción Nysem
+                         <div className="w-40 h-3 bg-[#10B981] rounded-full"></div> Gestión Integral Nysem Montalbán
                        </p>
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-24">
                         {[
                           { title: "CARTERA CLIENTES", val: clients.length, icon: Building2, color: "#0EA5E9" },
-                          { title: "ALERTAS CRÍTICAS", val: clients.filter(c => getRiskStyle(c.ruc, c.taxStatus).text === 'VENCE HOY').length, icon: AlertTriangle, color: "#EF4444" },
+                          { title: "ALERTAS SUNAT", val: clients.filter(c => getRiskStyle(c.ruc, c.taxStatus).text === 'VENCE HOY').length, icon: AlertTriangle, color: "#EF4444" },
                           { title: "STAFF AUDITOR", val: users.length, icon: Users, color: "#10B981" },
-                          { title: "ACCIONES HOY", val: reports.filter(r => r.date === getTodayISO()).length, icon: Activity, color: "#6366F1" }
+                          { title: "REGISTROS HOY", val: reports.filter(r => r.date === getTodayISO()).length, icon: Activity, color: "#6366F1" }
                         ].map((stat, i) => {
                           const IconComp = stat.icon;
                           return (
-                            <div key={i} className="bg-white p-14 rounded-[5rem] shadow-xl border-2 border-slate-50 flex flex-row items-center gap-12 group hover:shadow-3xl hover:scale-[1.02] transition-all relative overflow-hidden border-b-[20px]" style={{ borderBottomColor: stat.color }}>
+                            <div key={i} className="bg-white p-14 rounded-[5rem] shadow-xl border-2 border-slate-50 flex flex-row items-center gap-12 group hover:shadow-3xl transition-all relative overflow-hidden border-b-[20px]" style={{ borderBottomColor: stat.color }}>
                                 <div className="w-40 h-40 shrink-0 rounded-[3.5rem] bg-slate-50 flex items-center justify-center border-4 border-slate-100 shadow-inner group-hover:bg-[#020617] transition-all duration-500">
                                   <IconComp size={80} style={{ color: stat.color }} className="group-hover:text-white transition-colors"/>
                                 </div>
                                 <div className="flex-1">
-                                    <h3 className="text-slate-400 text-[20px] font-black uppercase tracking-[0.4em] mb-4 leading-none truncate">{stat.title}</h3>
+                                    <h3 className="text-slate-400 text-[18px] font-black uppercase tracking-[0.4em] mb-4 truncate leading-none">{stat.title}</h3>
                                     <div className="text-[10rem] font-black text-[#020617] tracking-tighter leading-none italic">{stat.val}</div>
                                 </div>
-                                <div className="absolute -right-20 -bottom-20 opacity-[0.03] text-slate-900 rotate-12 group-hover:rotate-0 transition-transform">
+                                <div className="absolute -right-20 -bottom-20 opacity-[0.03] text-slate-900 rotate-12 transition-transform group-hover:rotate-0">
                                   <IconComp size={350}/>
                                 </div>
                             </div>
@@ -373,8 +384,8 @@ export default function App() {
                            </button>
                         </div>
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-20 relative z-10">
-                            <input type="text" placeholder="RAZÓN SOCIAL" value={clientForm.name} onChange={e => setClientForm({...clientForm, name: e.target.value})} className="lg:col-span-2 p-12 bg-white/5 rounded-[4rem] border-4 border-white/10 font-black text-white text-4xl uppercase outline-none focus:border-[#0EA5E9] transition-all placeholder:text-slate-800"/>
-                            <input type="text" placeholder="RUC" value={clientForm.ruc} onChange={e => setClientForm({...clientForm, ruc: e.target.value})} className="p-12 bg-white/5 rounded-[4rem] border-4 border-white/10 font-black text-white text-4xl uppercase outline-none text-center font-mono focus:border-[#0EA5E9] transition-all placeholder:text-slate-800"/>
+                            <input type="text" placeholder="RAZÓN SOCIAL" value={clientForm.name} onChange={e => setClientForm({...clientForm, name: e.target.value})} className="lg:col-span-2 p-12 bg-white/5 rounded-[4rem] border-4 border-white/10 font-black text-white text-4xl uppercase outline-none focus:border-[#0EA5E9] transition-all"/>
+                            <input type="text" placeholder="RUC" value={clientForm.ruc} onChange={e => setClientForm({...clientForm, ruc: e.target.value})} className="p-12 bg-white/5 rounded-[4rem] border-4 border-white/10 font-black text-white text-4xl uppercase outline-none text-center font-mono focus:border-[#0EA5E9] transition-all"/>
                             <select value={clientForm.sector} onChange={e => setClientForm({...clientForm, sector: e.target.value})} className="p-12 bg-white/5 rounded-[4rem] border-4 border-white/10 font-black text-white text-[20px] uppercase h-28 text-center outline-none">
                                 <option value="Agricultura">AGRICULTURA</option>
                                 <option value="Construcción">CONSTRUCCIÓN</option>
@@ -389,16 +400,16 @@ export default function App() {
                         {clients.map(c => {
                             const style = getRiskStyle(c.ruc, c.taxStatus);
                             return (
-                                <div key={c.id} className="bg-white p-24 rounded-[8rem] border-4 border-slate-50 flex flex-col justify-between items-start group shadow-2xl transition-all border-b-[35px]" style={{ borderBottomColor: style.text === 'VENCE HOY' ? '#EF4444' : (c.taxStatus === 'declared' ? '#10B981' : '#F1F5F9') }}>
+                                <div key={c.id} className="bg-white p-24 rounded-[8rem] border-4 border-slate-50 flex flex-col justify-between items-start group shadow-2xl transition-all border-b-[35px] hover:border-[#0EA5E9]" style={{ borderBottomColor: style.text === 'VENCE HOY' ? '#EF4444' : (c.taxStatus === 'declared' ? '#10B981' : '#F1F5F9') }}>
                                     <div className="w-full">
                                         <div className="flex justify-between items-start mb-24">
                                             <div className="w-36 h-36 bg-slate-50 rounded-[3.5rem] flex items-center justify-center text-[#020617] border-2 border-slate-100 group-hover:bg-[#020617] group-hover:text-white transition-all duration-500"><Building2 size={80}/></div>
-                                            <div className={`px-12 py-6 rounded-full text-[18px] font-black uppercase tracking-[0.5em] border-4 ${style.bg} ${style.tx} ${style.ring}`}>{style.text}</div>
+                                            <div className={`px-12 py-6 rounded-full text-[18px] font-black uppercase tracking-[0.5em] border-4 ${style.bg} ${style.tx} ${style.text === 'VENCE HOY' ? 'animate-pulse ring-4 ring-red-100' : ''}`}>{style.text}</div>
                                         </div>
-                                        <h3 className="font-black text-[#020617] uppercase text-[3.5rem] leading-[1] tracking-tighter mb-14 italic group-hover:text-[#0EA5E9] transition-colors">{String(c.name)}</h3>
+                                        <h3 className="font-black text-[#020617] uppercase text-[3.5rem] leading-[1] tracking-tighter mb-14 italic">{String(c.name)}</h3>
                                         <div className="flex flex-wrap items-center gap-10 pt-14 border-t-4 border-slate-50">
                                               <span className="text-[26px] font-black text-slate-400 font-mono tracking-widest leading-none bg-slate-50 px-10 py-5 rounded-3xl border-2 border-slate-100 shadow-inner">RUC {String(c.ruc)}</span>
-                                              <span className="text-[18px] font-black text-[#10B981] uppercase tracking-[0.5em] leading-none flex items-center gap-8"><Zap size={24}/> {String(c.sector)}</span>
+                                              <span className="text-[18px] font-black text-[#10B981] uppercase tracking-[0.5em] leading-none flex items-center gap-8"><Activity size={24}/> {String(c.sector)}</span>
                                         </div>
                                     </div>
                                     <div className="w-full flex justify-between items-center mt-28 pt-20 border-t-4 border-slate-50">
@@ -429,7 +440,7 @@ export default function App() {
                                 <option value="">SELECCIÓN CLIENTE...</option>
                                 {clients.map(c => <option key={c.id} value={c.name} className="text-black">{String(c.name)}</option>)}
                             </select>
-                            <textarea value={reportForm.description} onChange={e => setReportForm({...reportForm, description: e.target.value})} className="w-full p-14 bg-white/5 rounded-[5rem] border-4 border-white/10 resize-none h-[600px] font-medium text-white shadow-inner text-[30px] leading-relaxed outline-none focus:bg-white/10 focus:border-[#0EA5E9] transition-all" placeholder="DETALLE DE LABOR..."></textarea>
+                            <textarea value={reportForm.description} onChange={e => setReportForm({...reportForm, description: e.target.value})} className="w-full p-14 bg-white/5 rounded-[5rem] border-4 border-white/10 resize-none h-[600px] font-medium text-white shadow-inner text-[30px] leading-relaxed outline-none focus:bg-white/10 focus:border-[#0EA5E9] transition-all" placeholder="LABOR REALIZADA..."></textarea>
                             <button onClick={async () => {
                                 if(!reportForm.description || !reportForm.clientName || !fbUser) return;
                                 try {
@@ -503,9 +514,9 @@ export default function App() {
                         </div>
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-20 relative z-10">
                             <input type="text" placeholder="NOMBRE" value={userForm.name} onChange={e => setUserForm({...userForm, name: e.target.value})} className="p-11 bg-white/5 rounded-[4rem] border-4 border-white/10 font-black text-white text-3xl uppercase outline-none focus:border-[#0EA5E9]"/>
-                            <input type="text" placeholder="ID USUARIO" value={userForm.username} onChange={e => setUserForm({...userForm, username: e.target.value})} className="p-11 bg-white/5 rounded-[4rem] border-4 border-white/10 font-black text-white text-3xl uppercase outline-none focus:border-[#0EA5E9]"/>
+                            <input type="text" placeholder="ID USUARIO (LOGIN)" value={userForm.username} onChange={e => setUserForm({...userForm, username: e.target.value})} className="p-11 bg-white/5 rounded-[4rem] border-4 border-white/10 font-black text-white text-3xl uppercase outline-none focus:border-[#0EA5E9]"/>
                             <input type="text" placeholder="CLAVE" value={userForm.password} onChange={e => setUserForm({...userForm, password: e.target.value})} className="p-11 bg-white/5 rounded-[4rem] border-4 border-white/10 font-black text-white text-3xl uppercase outline-none focus:border-[#0EA5E9]"/>
-                            <select value={userForm.role} onChange={e => setUserForm({...userForm, role: e.target.value})} className="p-11 bg-white/5 rounded-[4rem] border-4 border-white/10 font-black text-white text-[18px] uppercase h-28 text-center outline-none">
+                            <select value={userForm.role} onChange={e => setUserForm({...userForm, role: e.target.value})} className="p-11 bg-white/5 rounded-[4rem] border-4 border-white/10 font-black text-white text-[18px] uppercase h-28 text-center outline-none cursor-pointer">
                                 <option value="Auditor">AUDITOR (STAFF)</option>
                                 <option value="Administrador">ADMINISTRADOR (CPC)</option>
                             </select>
@@ -534,10 +545,13 @@ export default function App() {
           </div>
           
           <footer className="h-32 bg-[#020617] flex items-center px-32 justify-between text-[15px] font-black text-slate-600 uppercase tracking-[1.2em] z-50 border-t-8 border-white/5">
-             <span>Nysem Montalbán EIRL • 2026</span>
+             <div className="flex flex-col">
+                <span>Nysem Montalbán EIRL • 2026</span>
+                {isAdmin && <span className="text-[10px] text-slate-800 lowercase tracking-widest opacity-30">Node: {appId}</span>}
+             </div>
              <span className="flex items-center gap-24">
                 <span className="flex items-center gap-8 text-[#0EA5E9] font-black italic"><div className="w-6 h-6 rounded-full bg-[#10B981] animate-pulse"></div> NODO CONECTADO</span>
-                <span className="flex items-center gap-10 opacity-50"><ShieldCheck size={32}/> SUPREME v26.0.0</span>
+                <span className="flex items-center gap-10 opacity-50"><ShieldCheck size={32}/> SUPREME v27.0.0</span>
              </span>
           </footer>
        </main>
