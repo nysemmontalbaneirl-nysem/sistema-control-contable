@@ -19,7 +19,7 @@ import {
 
 /**
  * NYSEM MONTALBAN EIRL - SISTEMA DE GESTIÓN DE PRODUCCIÓN (SGP)
- * VERSIÓN 18.0.0 - CORPORATE BRAND EDITION
+ * VERSIÓN 18.5.0 - CORPORATE BRAND & LOGIC FIX
  * COLORES: Azul Oscuro (#0F172A), Celeste (#0EA5E9), Verde (#10B981)
  */
 
@@ -145,6 +145,13 @@ export default function App() {
     }
   };
 
+  const handleLogout = () => {
+    setIsLoggedIn(false);
+    setCurrentUserData(null);
+    setViewMode('dashboard');
+    setLoginForm({ username: '', password: '' });
+  };
+
   // --- CRUD FUNCTIONS (NUEVO, EDITAR, ELIMINAR, CANCELAR) ---
 
   // CLIENTS
@@ -171,6 +178,16 @@ export default function App() {
   const cancelClientEdit = () => {
     setEditingClientId(null);
     setClientForm({ name: '', ruc: '', sector: 'Servicios', honorario: '' });
+  };
+
+  const markAsDeclared = async (clientId) => {
+    try {
+      await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'clients', clientId), { 
+        taxStatus: 'declared' 
+      });
+    } catch (e) {
+      console.error("Error al declarar:", e);
+    }
   };
 
   // USERS
@@ -212,7 +229,7 @@ export default function App() {
           <RefreshCw className="text-sky-400 animate-spin" size={60} />
           <div className="text-center">
              <p className="text-[10px] font-black tracking-[0.8em] uppercase text-sky-400">Nysem Montalbán EIRL</p>
-             <p className="text-[9px] text-slate-500 uppercase tracking-widest mt-3 animate-pulse">Sincronizando Seguridad de Firma v18.0</p>
+             <p className="text-[9px] text-slate-500 uppercase tracking-widest mt-3 animate-pulse">Sincronizando Seguridad de Firma v18.5</p>
           </div>
         </div>
       </div>
@@ -263,7 +280,7 @@ export default function App() {
             {sidebarOpen && (
               <div className="ml-5 animate-in fade-in slide-in-from-left-4">
                 <span className="block font-black text-2xl text-white tracking-tighter uppercase leading-none">Nysem SGP</span>
-                <span className="text-[9px] font-black text-sky-400 uppercase tracking-[0.4em] mt-2 block">Management v18.0</span>
+                <span className="text-[9px] font-black text-sky-400 uppercase tracking-[0.4em] mt-2 block">Management v18.5</span>
               </div>
             )}
          </div>
@@ -578,7 +595,7 @@ export default function App() {
              <span className="flex items-center gap-6">
                 <span className="flex items-center gap-2 text-sky-400"><div className="w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.8)]"></div> Canal Cifrado</span>
                 <span className="text-white/5">|</span>
-                <span>Audit Console v18.0</span>
+                <span>Audit Console v18.5</span>
              </span>
           </footer>
        </main>
