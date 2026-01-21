@@ -4,7 +4,7 @@ import {
   CheckCircle2, Building2, AlertTriangle, Shield, 
   Plus, Trash2, Calendar, Database, UserCog, 
   LogOut, Clock, AlertCircle, Settings, ShieldCheck, 
-  Wifi, Zap, Activity
+  Wifi, Zap, Activity, BadgeCheck
 } from 'lucide-react';
 
 // Firebase v11+ Implementation
@@ -19,7 +19,7 @@ import {
 
 /**
  * NYSEM MONTALBAN EIRL - SISTEMA DE GESTIÓN DE PRODUCCIÓN (SGP)
- * VERSIÓN 15.0.0 - EJECUCIÓN DIRECTA & SYNC INTEGRITY
+ * VERSIÓN 15.0.1 - HOTFIX: BADGECHECK DEFINITION
  * Diseñado para: CPC Nysem Montalbán
  */
 
@@ -316,7 +316,7 @@ export default function App() {
                         {clients.map(c => {
                             const style = calculateTaxRisk(c.ruc, c.taxStatus);
                             return (
-                                <div key={c.id} className="bg-white p-10 rounded-[5rem] border-2 border-slate-50 shadow-xl flex flex-col justify-between items-start group hover:shadow-2xl transition-all border-b-[30px]" style={{ borderBottomColor: style.color === 'rose' ? '#E11D48' : (style.color === 'emerald' ? '#10B981' : '#2563EB') }}>
+                                <div key={c.id} className="bg-white p-10 rounded-[5rem] border-2 border-slate-50 shadow-xl flex flex-col justify-between items-start group shadow-sm hover:shadow-2xl transition-all border-b-[30px]" style={{ borderBottomColor: style.color === 'rose' ? '#E11D48' : (style.color === 'emerald' ? '#10B981' : '#2563EB') }}>
                                     <div className="w-full">
                                         <div className="flex justify-between items-start mb-10">
                                             <div className="w-24 h-24 bg-slate-50 rounded-[2.5rem] flex items-center justify-center text-slate-800 border-2 border-slate-100 shadow-inner group-hover:bg-[#020617] group-hover:text-white transition-all shadow-xl"><Building2 size={44}/></div>
